@@ -1,6 +1,7 @@
-from pydantic_settings import BaseSettings
 from typing import Optional
 from urllib.parse import quote_plus
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -33,7 +34,7 @@ class Settings(BaseSettings):
     redis_url: Optional[str] = "redis://localhost:6379"
 
     # Model Configuration
-    claude_model: str = "claude-3-haiku-20240307"
+    claude_model: str = "claude-sonnet-4-20250514"
     voyage_embedding_model: str = "voyage-3-large"
     embedding_dimension: int = 1024
 

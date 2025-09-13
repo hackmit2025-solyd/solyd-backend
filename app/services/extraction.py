@@ -4,6 +4,7 @@ from datetime import datetime
 from app.models.schemas import ChunkData
 from app.config import settings
 import anthropic
+from app.services.validation import SchemaValidator
 
 
 class ExtractionService:
@@ -11,6 +12,7 @@ class ExtractionService:
         self.client = None
         if settings.anthropic_api_key:
             self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self.validator = SchemaValidator()
 
     def extract_entities_from_chunk(
         self, chunk: ChunkData, source_id: str
@@ -108,16 +110,28 @@ Text to analyze:
 Return only valid JSON, no additional text."""
 
     def _parse_extraction_response(self, response_text: str) -> Dict[str, Any]:
-        """Parse and validate Claude's response"""
+        """Parse and validate Claude's response with auto-repair"""
         try:
-            # Extract JSON from response
+            # First try to extract JSON from response
             json_start = response_text.find("{")
             json_end = response_text.rfind("}") + 1
             if json_start != -1 and json_end > json_start:
                 json_str = response_text[json_start:json_end]
-                return json.loads(json_str)
-        except json.JSONDecodeError as e:
-            print(f"Failed to parse JSON: {e}")
+
+                # Try auto-repair if initial parsing fails
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError as e:
+                    print(f"Initial JSON parse failed: {e}")
+                    # Attempt to repair common JSON issues
+                    repaired = self.validator.auto_repair_json(json_str)
+                    if repaired:
+                        print("JSON auto-repair successful")
+                        return json.loads(repaired)
+
+        except Exception as e:
+            print(f"Failed to parse extraction response: {e}")
+            print(f"Response text: {response_text[:500]}...")  # Log first 500 chars for debugging
 
         return {"entities": {}, "assertions": []}
 
