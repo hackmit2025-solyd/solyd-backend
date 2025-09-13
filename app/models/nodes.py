@@ -116,10 +116,39 @@ class SourceDocument(BaseModel):
     hash_sha256: Optional[str] = None
 
 
+class OntologyTerm(BaseModel):
+    """Medical ontology term from standard vocabularies"""
+    system: str  # SNOMED, ICD10, LOINC, RxNorm, etc.
+    code: str
+    name: str
+    synonyms: Optional[List[str]] = None
+    parent_codes: Optional[List[str]] = None
+    description: Optional[str] = None
+
+
+class ExternalResource(BaseModel):
+    """External medical resources like guidelines, papers, etc."""
+    id: str
+    title: str
+    source: str  # PubMed, MSD Manual, UpToDate, etc.
+    url: Optional[str] = None
+    pub_date: Optional[date] = None
+    authors: Optional[List[str]] = None
+    doi: Optional[str] = None
+    evidence_level: Optional[str] = None  # 1a, 1b, 2a, 2b, etc.
+    abstract: Optional[str] = None
+
+
 class Assertion(BaseModel):
     assertion_id: str
     predicate: str
+    subject_ref: str
+    object_ref: str
     time: Optional[datetime] = None
     negation: bool = False
     uncertainty: bool = False
     confidence: float = Field(ge=0.0, le=1.0, default=1.0)
+    chunk_ids: List[str] = []
+    source_id: str
+    valid_from: Optional[datetime] = None
+    valid_to: Optional[datetime] = None
