@@ -1,8 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from app.models.nodes import *
-from app.models.relationships import *
 
 
 # Request/Response Schemas
