@@ -4,24 +4,24 @@ from app.services.s3 import S3Service
 
 
 class TestS3Service:
+    @patch("app.services.s3.settings")
     @patch("boto3.client")
-    def test_init(self, mock_boto_client):
+    def test_init(self, mock_boto_client, mock_settings):
         """Test S3Service initialization"""
-        with patch("app.config.settings") as mock_settings:
-            mock_settings.aws_access_key_id = "test-key"
-            mock_settings.aws_secret_access_key = "test-secret"
-            mock_settings.aws_region = "us-east-1"
-            mock_settings.s3_bucket_name = "test-bucket"
+        mock_settings.aws_access_key_id = "test-key"
+        mock_settings.aws_secret_access_key = "test-secret"
+        mock_settings.aws_region = "us-east-1"
+        mock_settings.s3_bucket_name = "test-bucket"
 
-            service = S3Service()
+        service = S3Service()
 
-            mock_boto_client.assert_called_once_with(
-                "s3",
-                aws_access_key_id="test-key",
-                aws_secret_access_key="test-secret",
-                region_name="us-east-1",
-            )
-            assert service.bucket_name == "test-bucket"
+        mock_boto_client.assert_called_once_with(
+            "s3",
+            aws_access_key_id="test-key",
+            aws_secret_access_key="test-secret",
+            region_name="us-east-1",
+        )
+        assert service.bucket_name == "test-bucket"
 
     @patch("boto3.client")
     def test_generate_presigned_upload_url(self, mock_boto_client):

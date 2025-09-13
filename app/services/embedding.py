@@ -48,7 +48,7 @@ class EmbeddingService:
 
         if not self.client:
             logger.warning("Voyage AI client not available, returning mock embeddings")
-            return [self._get_mock_embedding() for _ in texts]
+            return [self._get_mock_embedding() if text else None for text in texts]
 
         try:
             # Filter out empty texts

@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+from urllib.parse import quote_plus
 
 
 class Settings(BaseSettings):
@@ -8,8 +9,10 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"
     neo4j_password: str = "P@ssw0rd"
 
-    # PostgreSQL
-    postgres_url: str = "postgresql://postgres:P@ssw0rd@localhost:5432/postgres"
+    # PostgreSQL - URL encode the password with @ symbol
+    postgres_url: str = (
+        f"postgresql://postgres:{quote_plus('P@ssw0rd')}@localhost:5432/postgres"
+    )
 
     # Claude API
     anthropic_api_key: Optional[str] = None

@@ -77,7 +77,7 @@ class IngestionService:
                 "timestamp": datetime.now().isoformat(),
                 "s3_url": s3_file_key if s3_file_key else None,
             },
-            "chunks": [chunk.dict() for chunk in chunks],
+            "chunks": [chunk.model_dump() for chunk in chunks],
             "chunk_count": len(chunks),
         }
 
@@ -97,7 +97,7 @@ class IngestionService:
                 content=document.content,
                 source_type=document.source_type,
                 s3_url=s3_file_key,
-                metadata=document.metadata if hasattr(document, "metadata") else {},
+                attributes=document.metadata if hasattr(document, "metadata") else {},
             )
             self.db.add(db_document)
 
@@ -109,7 +109,7 @@ class IngestionService:
                     content=chunk.text,
                     chunk_index=chunk.seq,
                     embedding=embedding,
-                    metadata={"chunk_id": chunk.chunk_id},
+                    attributes={"chunk_id": chunk.chunk_id},
                 )
                 self.db.add(db_chunk)
 

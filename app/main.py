@@ -13,8 +13,13 @@ async def lifespan(app: FastAPI):
     # Startup
     print("Starting Medical Knowledge Graph Backend...")
 
-    # Initialize PostgreSQL database
-    init_db()
+    # Initialize PostgreSQL database (optional - won't fail if DB is not available)
+    try:
+        init_db()
+        print("PostgreSQL database initialized successfully")
+    except Exception as e:
+        print(f"Warning: PostgreSQL initialization failed: {e}")
+        print("Continuing without PostgreSQL support...")
 
     # Initialize Neo4j connection
     neo4j_conn = Neo4jConnection()
