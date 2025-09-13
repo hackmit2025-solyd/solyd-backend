@@ -19,8 +19,8 @@ class ExtractionService:
     ) -> Dict[str, Any]:
         """Extract entities and assertions from a single chunk using Claude"""
         if not self.client:
-            # Return mock data for testing without API key
-            return self._get_mock_extraction(chunk, source_id)
+            print("Warning: No Anthropic API client configured")
+            return {"entities": {}, "assertions": []}
 
         prompt = self._build_extraction_prompt(chunk.text)
 
@@ -46,8 +46,7 @@ class ExtractionService:
             import traceback
             print(f"Extraction error: {e}")
             print(f"Traceback: {traceback.format_exc()}")
-            # Return mock data instead of empty for debugging
-            return self._get_mock_extraction(chunk, source_id)
+            return {"entities": {}, "assertions": []}
 
     def _build_extraction_prompt(self, text: str) -> str:
         """Build prompt for entity extraction"""
@@ -138,26 +137,6 @@ Return only valid JSON, no additional text."""
 
         return {"entities": {}, "assertions": []}
 
-    def _get_mock_extraction(self, chunk: ChunkData, source_id: str) -> Dict[str, Any]:
-        """Return mock extraction for testing without API"""
-        return {
-            "entities": {
-                "patients": [{"id": "P_MOCK", "name": "Test Patient"}],
-                "encounters": [{"id": "E_MOCK", "date": "2025-09-13", "dept": "Test"}],
-                "symptoms": [{"name": "mock_symptom", "code": "MOCK:001"}],
-            },
-            "assertions": [
-                {
-                    "id": f"A_MOCK_{chunk.seq}",
-                    "predicate": "HAS_SYMPTOM",
-                    "subject_ref": "E_MOCK",
-                    "object_ref": "mock_symptom",
-                    "confidence": 0.75,
-                    "chunk_ids": [chunk.chunk_id],
-                    "source_id": source_id,
-                }
-            ],
-        }
 
     def normalize_entities(self, entities: Dict[str, List]) -> Dict[str, List]:
         """Normalize extracted entities to standard formats"""
