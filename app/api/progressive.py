@@ -1,6 +1,7 @@
 """
 Progressive graph rendering API for large-scale visualization
 """
+
 from fastapi import APIRouter, HTTPException, Depends, Request, Query
 from typing import Dict, List, Optional, Any, Tuple
 from pydantic import BaseModel, Field
@@ -12,28 +13,43 @@ router = APIRouter()
 
 class GraphExpansionRequest(BaseModel):
     """Request for expanding graph from a node"""
+
     node_id: str = Field(..., description="Node to expand from")
     depth: int = Field(1, ge=1, le=3, description="Expansion depth")
-    relationship_types: Optional[List[str]] = Field(None, description="Filter by relationship types")
-    limit_per_type: int = Field(10, ge=1, le=50, description="Max nodes per relationship type")
-    exclude_nodes: Optional[List[str]] = Field(None, description="Nodes to exclude from expansion")
+    relationship_types: Optional[List[str]] = Field(
+        None, description="Filter by relationship types"
+    )
+    limit_per_type: int = Field(
+        10, ge=1, le=50, description="Max nodes per relationship type"
+    )
+    exclude_nodes: Optional[List[str]] = Field(
+        None, description="Nodes to exclude from expansion"
+    )
 
 
 class GraphFilterRequest(BaseModel):
     """Request for filtering graph visualization"""
+
     show_negated: bool = Field(True, description="Show negated relationships")
-    min_confidence: float = Field(0.5, ge=0.0, le=1.0, description="Minimum confidence threshold")
+    min_confidence: float = Field(
+        0.5, ge=0.0, le=1.0, description="Minimum confidence threshold"
+    )
     time_range: Optional[Dict[str, str]] = Field(None, description="Time range filter")
-    entity_types: Optional[List[str]] = Field(None, description="Entity types to include")
+    entity_types: Optional[List[str]] = Field(
+        None, description="Entity types to include"
+    )
 
 
 class VisualizationConfig(BaseModel):
     """Configuration for graph visualization"""
+
     layout: str = Field("force-directed", description="Layout algorithm")
     clustering: bool = Field(True, description="Enable node clustering")
     show_labels: bool = Field(True, description="Show node labels")
     highlight_conflicts: bool = Field(True, description="Highlight conflicting data")
-    abstraction_level: str = Field("patient", description="patient, encounter, or ontology level")
+    abstraction_level: str = Field(
+        "patient", description="patient, encounter, or ontology level"
+    )
 
 
 def get_query_service(request: Request) -> QueryService:
@@ -45,7 +61,7 @@ def get_query_service(request: Request) -> QueryService:
 def get_progressive_graph(
     start_node: str,
     depth: int = Query(1, ge=1, le=3),
-    query_service: QueryService = Depends(get_query_service)
+    query_service: QueryService = Depends(get_query_service),
 ) -> Dict[str, Any]:
     """Get initial graph centered on a node with progressive loading capability"""
 
@@ -61,10 +77,9 @@ def get_progressive_graph(
     """
 
     try:
-        results = query_service.neo4j.execute_query(query, {
-            "node_id": start_node,
-            "depth": depth
-        })
+        results = query_service.neo4j.execute_query(
+            query, {"node_id": start_node, "depth": depth}
+        )
 
         if not results:
             raise HTTPException(status_code=404, detail=f"Node {start_node} not found")
@@ -85,7 +100,7 @@ def get_progressive_graph(
             "statistics": stats,
             "expandable_nodes": expandable,
             "total_nodes": len(nodes),
-            "total_relationships": len(relationships)
+            "total_relationships": len(relationships),
         }
 
     except Exception as e:
@@ -95,7 +110,7 @@ def get_progressive_graph(
 @router.post("/graph/expand")
 def expand_graph_node(
     request: GraphExpansionRequest,
-    query_service: QueryService = Depends(get_query_service)
+    query_service: QueryService = Depends(get_query_service),
 ) -> Dict[str, Any]:
     """Expand graph from a specific node"""
 
@@ -120,11 +135,14 @@ def expand_graph_node(
     exclude_ids = request.exclude_nodes or []
 
     try:
-        results = query_service.neo4j.execute_query(query, {
-            "node_id": request.node_id,
-            "exclude_ids": exclude_ids,
-            "limit_per_type": request.limit_per_type
-        })
+        results = query_service.neo4j.execute_query(
+            query,
+            {
+                "node_id": request.node_id,
+                "exclude_ids": exclude_ids,
+                "limit_per_type": request.limit_per_type,
+            },
+        )
 
         # Collect expanded nodes and relationships
         new_nodes = []
@@ -145,10 +163,13 @@ def expand_graph_node(
             RETURN r, n.id AS from_id, m.id AS to_id
             """
 
-            rel_results = query_service.neo4j.execute_query(rel_query, {
-                "center_id": request.node_id,
-                "new_node_ids": [n["id"] for n in new_nodes]
-            })
+            rel_results = query_service.neo4j.execute_query(
+                rel_query,
+                {
+                    "center_id": request.node_id,
+                    "new_node_ids": [n["id"] for n in new_nodes],
+                },
+            )
 
             for record in rel_results:
                 new_relationships.append(_format_relationship(record))
@@ -158,7 +179,7 @@ def expand_graph_node(
             "new_nodes": new_nodes,
             "new_relationships": new_relationships,
             "nodes_added": len(new_nodes),
-            "relationships_added": len(new_relationships)
+            "relationships_added": len(new_relationships),
         }
 
     except Exception as e:
@@ -169,7 +190,7 @@ def expand_graph_node(
 def filter_graph(
     filter_request: GraphFilterRequest,
     nodes: List[Dict[str, Any]],
-    relationships: List[Dict[str, Any]]
+    relationships: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
     """Filter graph based on criteria"""
 
@@ -198,7 +219,8 @@ def filter_graph(
     # Filter nodes by entity type
     if filter_request.entity_types:
         filtered_nodes = [
-            node for node in filtered_nodes
+            node
+            for node in filtered_nodes
             if node.get("label") in filter_request.entity_types
         ]
 
@@ -209,8 +231,7 @@ def filter_graph(
         connected_node_ids.add(rel["to"])
 
     filtered_nodes = [
-        node for node in filtered_nodes
-        if node["id"] in connected_node_ids
+        node for node in filtered_nodes if node["id"] in connected_node_ids
     ]
 
     return {
@@ -218,16 +239,18 @@ def filter_graph(
         "relationships": filtered_relationships,
         "filters_applied": filter_request.model_dump(),
         "nodes_filtered": len(nodes) - len(filtered_nodes),
-        "relationships_filtered": len(relationships) - len(filtered_relationships)
+        "relationships_filtered": len(relationships) - len(filtered_relationships),
     }
 
 
 @router.post("/graph/cluster/{node_id}")
 def get_node_cluster(
     node_id: str,
-    cluster_type: str = Query("similar", description="similar, temporal, or structural"),
+    cluster_type: str = Query(
+        "similar", description="similar, temporal, or structural"
+    ),
     limit: int = Query(20, ge=1, le=100),
-    query_service: QueryService = Depends(get_query_service)
+    query_service: QueryService = Depends(get_query_service),
 ) -> Dict[str, Any]:
     """Get cluster of related nodes for visualization"""
 
@@ -275,13 +298,14 @@ def get_node_cluster(
         """
 
     else:
-        raise HTTPException(status_code=400, detail=f"Invalid cluster type: {cluster_type}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid cluster type: {cluster_type}"
+        )
 
     try:
-        results = query_service.neo4j.execute_query(query, {
-            "node_id": node_id,
-            "limit": limit
-        })
+        results = query_service.neo4j.execute_query(
+            query, {"node_id": node_id, "limit": limit}
+        )
 
         if not results:
             return {"cluster_nodes": [], "cluster_type": cluster_type}
@@ -294,7 +318,7 @@ def get_node_cluster(
             "center_node": node_id,
             "cluster_type": cluster_type,
             "cluster_nodes": cluster_nodes,
-            "cluster_size": len(cluster_nodes)
+            "cluster_size": len(cluster_nodes),
         }
 
     except Exception as e:
@@ -303,8 +327,7 @@ def get_node_cluster(
 
 @router.get("/graph/conflicts/{node_id}")
 def get_node_conflicts(
-    node_id: str,
-    query_service: QueryService = Depends(get_query_service)
+    node_id: str, query_service: QueryService = Depends(get_query_service)
 ) -> Dict[str, Any]:
     """Get conflicting data related to a node"""
 
@@ -328,16 +351,18 @@ def get_node_conflicts(
 
         conflicts = []
         for record in results:
-            conflicts.append({
-                "relationship_type": record["relationship_type"],
-                "target_id": record["target_id"],
-                "conflicting_data": record["conflicting_data"]
-            })
+            conflicts.append(
+                {
+                    "relationship_type": record["relationship_type"],
+                    "target_id": record["target_id"],
+                    "conflicting_data": record["conflicting_data"],
+                }
+            )
 
         return {
             "node_id": node_id,
             "conflicts": conflicts,
-            "conflict_count": len(conflicts)
+            "conflict_count": len(conflicts),
         }
 
     except Exception as e:
@@ -367,10 +392,12 @@ def _format_node(node: Any) -> Dict[str, Any]:
 
     return {
         "id": props.get("id") or props.get("assertion_id") or str(id(node)),
-        "label": props.get("__labels__", ["Unknown"])[0] if "__labels__" in props else "Unknown",
+        "label": props.get("__labels__", ["Unknown"])[0]
+        if "__labels__" in props
+        else "Unknown",
         "properties": props,
         "display_name": _get_display_name(props),
-        "category": _get_node_category(props)
+        "category": _get_node_category(props),
     }
 
 
@@ -386,16 +413,13 @@ def _format_relationship(rel: Any) -> Dict[str, Any]:
         "properties": props,
         "negation": props.get("negation", False),
         "confidence": props.get("confidence", 1.0),
-        "display_type": "negated" if props.get("negation") else "confirmed"
+        "display_type": "negated" if props.get("negation") else "confirmed",
     }
 
 
 def _get_display_name(props: Dict) -> str:
     """Get display name for node"""
-    return (props.get("name") or
-           props.get("title") or
-           props.get("id") or
-           "Unknown")
+    return props.get("name") or props.get("title") or props.get("id") or "Unknown"
 
 
 def _get_node_category(props: Dict) -> str:
@@ -411,20 +435,22 @@ def _get_node_category(props: Dict) -> str:
         "Medication": "intervention",
         "Test": "diagnostic",
         "TestResult": "result",
-        "Assertion": "evidence"
+        "Assertion": "evidence",
     }
 
     return category_map.get(label, "other")
 
 
-def _calculate_graph_stats(nodes: List[Dict], relationships: List[Dict]) -> Dict[str, Any]:
+def _calculate_graph_stats(
+    nodes: List[Dict], relationships: List[Dict]
+) -> Dict[str, Any]:
     """Calculate graph statistics for visualization"""
     stats = {
         "node_types": {},
         "relationship_types": {},
         "avg_degree": 0,
         "density": 0,
-        "conflict_count": 0
+        "conflict_count": 0,
     }
 
     # Count node types
@@ -436,7 +462,9 @@ def _calculate_graph_stats(nodes: List[Dict], relationships: List[Dict]) -> Dict
     degree_count = {}
     for rel in relationships:
         rel_type = rel.get("type", "Unknown")
-        stats["relationship_types"][rel_type] = stats["relationship_types"].get(rel_type, 0) + 1
+        stats["relationship_types"][rel_type] = (
+            stats["relationship_types"].get(rel_type, 0) + 1
+        )
 
         # Track degree
         from_id = rel.get("from")
@@ -460,8 +488,9 @@ def _calculate_graph_stats(nodes: List[Dict], relationships: List[Dict]) -> Dict
     return stats
 
 
-def _identify_expandable_nodes(nodes: List[Dict], relationships: List[Dict],
-                              query_service: QueryService) -> List[str]:
+def _identify_expandable_nodes(
+    nodes: List[Dict], relationships: List[Dict], query_service: QueryService
+) -> List[str]:
     """Identify nodes that can be expanded"""
     expandable = []
 

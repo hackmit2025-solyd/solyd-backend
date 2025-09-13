@@ -75,7 +75,9 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
         resolved_entities = []
         for entity_type, entities in normalized.items():
             for entity in entities:
-                resolution = resolution_service.resolve_entity(entity_type, entity, document.source_id)
+                resolution = resolution_service.resolve_entity(
+                    entity_type, entity, document.source_id
+                )
                 resolution["entity_type"] = entity_type
                 resolved_entities.append(resolution)
 
@@ -156,7 +158,9 @@ def upload_document_with_s3(
         resolved_entities = []
         for entity_type, entities in normalized.items():
             for entity in entities:
-                resolution = resolution_service.resolve_entity(entity_type, entity, document.source_id)
+                resolution = resolution_service.resolve_entity(
+                    entity_type, entity, document.source_id
+                )
                 resolution["entity_type"] = entity_type
                 resolved_entities.append(resolution)
 
@@ -257,46 +261,17 @@ def _execute_upsert_plan(neo4j: Neo4jConnection, plan: Dict) -> Dict:
     for node_plan in plan.get("nodes", []):
         try:
             label = node_plan["label"]
-            id_prop, id_val = node_plan["id_property"]
+            uuid = node_plan["uuid"]
             props = node_plan["properties"]
 
-            # Use the resolved node_id instead of id_property for merging
-            # This ensures uniqueness based on our ID generation logic
-            node_id = node_plan.get("node_id")
-            if node_id:
-                # Override the id value with the generated unique ID
-                id_val = node_id
-                props["id"] = node_id  # Ensure the property is also updated
+            # Build MERGE query using UUID
+            query = f"""
+            MERGE (n:{label} {{uuid: $uuid}})
+            SET n += $props
+            RETURN n
+            """
 
-            # Debug: Log encounter nodes
-            if label == "Encounter":
-                print(f"DEBUG Encounter MERGE: id_prop={id_prop}, id_val={id_val}, node_id={node_id}")
-                print(f"DEBUG Encounter props: {props}")
-
-            # Build MERGE query - special handling for encounters
-            if label == "Encounter" and props.get("patient_id") and props.get("date"):
-                # Use composite key for encounters to prevent duplicates
-                query = f"""
-                MERGE (n:{label} {{patient_id: $patient_id, date: $date, dept: $dept}})
-                SET n += $props
-                RETURN n
-                """
-                params = {
-                    "patient_id": props.get("patient_id"),
-                    "date": props.get("date"),
-                    "dept": props.get("dept", "unknown"),
-                    "props": props
-                }
-            else:
-                # Standard MERGE for other entities
-                query = f"""
-                MERGE (n:{label} {{{id_prop}: $id_val}})
-                SET n += $props
-                RETURN n
-                """
-                params = {"id_val": id_val, "props": props}
-
-            neo4j.execute_query(query, params)
+            neo4j.execute_query(query, {"uuid": uuid, "props": props})
             results["nodes_created"] += 1
 
         except Exception as e:
@@ -306,29 +281,26 @@ def _execute_upsert_plan(neo4j: Neo4jConnection, plan: Dict) -> Dict:
     for rel_plan in plan.get("relationships", []):
         try:
             rel_type = rel_plan["type"]
-            from_node = rel_plan["from_node"]
-            to_node = rel_plan["to_node"]
+            from_uuid = rel_plan["from_uuid"]
+            to_uuid = rel_plan["to_uuid"]
             props = rel_plan["properties"]
 
-            # Build MERGE query for relationship
-            # Try multiple ID properties since different node types use different IDs
+            # Build MERGE query for relationship using UUIDs
             query = f"""
-            MATCH (from)
-            WHERE from.id = $from_id OR from.name = $from_id OR from.code = $from_id
-            MATCH (to)
-            WHERE to.id = $to_id OR to.name = $to_id OR to.code = $to_id
+            MATCH (from {{uuid: $from_uuid}})
+            MATCH (to {{uuid: $to_uuid}})
             MERGE (from)-[r:{rel_type}]->(to)
             SET r += $props
             RETURN r
             """
 
             neo4j.execute_query(
-                query, {"from_id": from_node, "to_id": to_node, "props": props}
+                query, {"from_uuid": from_uuid, "to_uuid": to_uuid, "props": props}
             )
             results["relationships_created"] += 1
 
         except Exception as e:
-            error_msg = f"Relationship upsert failed - Type: {rel_type}, From: {from_node}, To: {to_node}, Error: {e}"
+            error_msg = f"Relationship upsert failed - Type: {rel_type}, From: {from_uuid}, To: {to_uuid}, Error: {e}"
             print(error_msg)
             results["errors"].append(error_msg)
 

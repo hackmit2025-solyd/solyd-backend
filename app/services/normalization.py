@@ -1,6 +1,7 @@
 """
 Medical data normalization service for units, dates, and codes
 """
+
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 import re
@@ -20,14 +21,12 @@ class MedicalNormalizer:
         "kg": 1000000.0,
         "lb": 453592.0,
         "oz": 28349.5,
-
         # Volume units to mL
         "l": 1000.0,
         "ml": 1.0,
         "dl": 100.0,
         "μl": 0.001,
         "ul": 0.001,
-
         # Concentration normalizations
         "mg/l": 1.0,
         "g/l": 1000.0,
@@ -52,20 +51,21 @@ class MedicalNormalizer:
 
     # Date format patterns
     DATE_PATTERNS = [
-        (r'\d{4}-\d{2}-\d{2}', '%Y-%m-%d'),
-        (r'\d{2}/\d{2}/\d{4}', '%m/%d/%Y'),
-        (r'\d{2}-\d{2}-\d{4}', '%m-%d-%Y'),
-        (r'\d{1,2}/\d{1,2}/\d{4}', '%m/%d/%Y'),
-        (r'\d{4}/\d{2}/\d{2}', '%Y/%m/%d'),
+        (r"\d{4}-\d{2}-\d{2}", "%Y-%m-%d"),
+        (r"\d{2}/\d{2}/\d{4}", "%m/%d/%Y"),
+        (r"\d{2}-\d{2}-\d{4}", "%m-%d-%Y"),
+        (r"\d{1,2}/\d{1,2}/\d{4}", "%m/%d/%Y"),
+        (r"\d{4}/\d{2}/\d{2}", "%Y/%m/%d"),
     ]
 
-    def normalize_value_with_unit(self, value: Any, unit: str,
-                                 target_unit: Optional[str] = None) -> Tuple[float, str]:
+    def normalize_value_with_unit(
+        self, value: Any, unit: str, target_unit: Optional[str] = None
+    ) -> Tuple[float, str]:
         """Normalize a value with its unit to standard format"""
         # Clean the value
         if isinstance(value, str):
             # Extract numeric value from string
-            numeric_match = re.search(r'[-+]?\d*\.?\d+', value.replace(',', ''))
+            numeric_match = re.search(r"[-+]?\d*\.?\d+", value.replace(",", ""))
             if numeric_match:
                 value = float(numeric_match.group())
             else:
@@ -96,7 +96,7 @@ class MedicalNormalizer:
             return None
 
         # Already in ISO format
-        if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+        if re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
             return date_str
 
         # Try different date patterns
@@ -112,17 +112,20 @@ class MedicalNormalizer:
         date_lower = date_str.lower()
         if "yesterday" in date_lower:
             from datetime import timedelta
+
             return (datetime.now().date() - timedelta(days=1)).isoformat()
         elif "today" in date_lower:
             return datetime.now().date().isoformat()
         elif "tomorrow" in date_lower:
             from datetime import timedelta
+
             return (datetime.now().date() + timedelta(days=1)).isoformat()
 
         return None
 
-    def normalize_test_result(self, test_name: str, value: Any,
-                            unit: str) -> Dict[str, Any]:
+    def normalize_test_result(
+        self, test_name: str, value: Any, unit: str
+    ) -> Dict[str, Any]:
         """Normalize test result with reference ranges and flags"""
         result = {"test": test_name, "value": value, "unit": unit}
 
@@ -160,7 +163,7 @@ class MedicalNormalizer:
         result = {}
 
         # Extract dose amount and unit
-        dose_match = re.search(r'(\d+(?:\.\d+)?)\s*([a-zμ]+)', dose_str)
+        dose_match = re.search(r"(\d+(?:\.\d+)?)\s*([a-zμ]+)", dose_str)
         if dose_match:
             amount = float(dose_match.group(1))
             unit = dose_match.group(2)
@@ -177,35 +180,35 @@ class MedicalNormalizer:
 
         # Extract frequency
         freq_patterns = {
-            r'once\s+daily|qd|od': 'once daily',
-            r'twice\s+daily|bid|bd': 'twice daily',
-            r'three\s+times\s+daily|tid|tds': 'three times daily',
-            r'four\s+times\s+daily|qid|qds': 'four times daily',
-            r'every\s+(\d+)\s+hours?': r'every \1 hours',
-            r'prn|as\s+needed': 'as needed',
-            r'qhs|at\s+bedtime': 'at bedtime',
-            r'qam|in\s+the\s+morning': 'in the morning'
+            r"once\s+daily|qd|od": "once daily",
+            r"twice\s+daily|bid|bd": "twice daily",
+            r"three\s+times\s+daily|tid|tds": "three times daily",
+            r"four\s+times\s+daily|qid|qds": "four times daily",
+            r"every\s+(\d+)\s+hours?": r"every \1 hours",
+            r"prn|as\s+needed": "as needed",
+            r"qhs|at\s+bedtime": "at bedtime",
+            r"qam|in\s+the\s+morning": "in the morning",
         }
 
         for pattern, replacement in freq_patterns.items():
             if re.search(pattern, dose_str):
-                if r'\1' in replacement:
+                if r"\1" in replacement:
                     match = re.search(pattern, dose_str)
-                    result["frequency"] = replacement.replace(r'\1', match.group(1))
+                    result["frequency"] = replacement.replace(r"\1", match.group(1))
                 else:
                     result["frequency"] = replacement
                 break
 
         # Extract route
         route_patterns = {
-            r'po|oral|by\s+mouth': 'oral',
-            r'iv|intravenous': 'IV',
-            r'im|intramuscular': 'IM',
-            r'sc|subq|subcutaneous': 'SC',
-            r'topical|apply': 'topical',
-            r'inhale|inhalation': 'inhalation',
-            r'nasal': 'nasal',
-            r'rectal|pr': 'rectal'
+            r"po|oral|by\s+mouth": "oral",
+            r"iv|intravenous": "IV",
+            r"im|intramuscular": "IM",
+            r"sc|subq|subcutaneous": "SC",
+            r"topical|apply": "topical",
+            r"inhale|inhalation": "inhalation",
+            r"nasal": "nasal",
+            r"rectal|pr": "rectal",
         }
 
         for pattern, route in route_patterns.items():
@@ -223,18 +226,18 @@ class MedicalNormalizer:
         gender_lower = gender_str.lower().strip()
 
         gender_map = {
-            'male': 'M',
-            'm': 'M',
-            'man': 'M',
-            'boy': 'M',
-            'female': 'F',
-            'f': 'F',
-            'woman': 'F',
-            'girl': 'F',
-            'other': 'O',
-            'o': 'O',
-            'unknown': 'U',
-            'u': 'U'
+            "male": "M",
+            "m": "M",
+            "man": "M",
+            "boy": "M",
+            "female": "F",
+            "f": "F",
+            "woman": "F",
+            "girl": "F",
+            "other": "O",
+            "o": "O",
+            "unknown": "U",
+            "u": "U",
         }
 
         return gender_map.get(gender_lower, None)
@@ -247,36 +250,36 @@ class MedicalNormalizer:
         dept_lower = dept_str.lower().strip()
 
         dept_map = {
-            'er': 'Emergency',
-            'ed': 'Emergency',
-            'emergency': 'Emergency',
-            'emergency room': 'Emergency',
-            'emergency department': 'Emergency',
-            'icu': 'ICU',
-            'intensive care': 'ICU',
-            'intensive care unit': 'ICU',
-            'im': 'Internal Medicine',
-            'internal': 'Internal Medicine',
-            'internal medicine': 'Internal Medicine',
-            'cardio': 'Cardiology',
-            'cardiology': 'Cardiology',
-            'neuro': 'Neurology',
-            'neurology': 'Neurology',
-            'ortho': 'Orthopedics',
-            'orthopedics': 'Orthopedics',
-            'peds': 'Pediatrics',
-            'pediatrics': 'Pediatrics',
-            'psych': 'Psychiatry',
-            'psychiatry': 'Psychiatry',
-            'ob': 'Obstetrics',
-            'obgyn': 'Obstetrics/Gynecology',
-            'ob/gyn': 'Obstetrics/Gynecology',
-            'surgery': 'Surgery',
-            'surg': 'Surgery',
-            'radiology': 'Radiology',
-            'rad': 'Radiology',
-            'oncology': 'Oncology',
-            'onc': 'Oncology',
+            "er": "Emergency",
+            "ed": "Emergency",
+            "emergency": "Emergency",
+            "emergency room": "Emergency",
+            "emergency department": "Emergency",
+            "icu": "ICU",
+            "intensive care": "ICU",
+            "intensive care unit": "ICU",
+            "im": "Internal Medicine",
+            "internal": "Internal Medicine",
+            "internal medicine": "Internal Medicine",
+            "cardio": "Cardiology",
+            "cardiology": "Cardiology",
+            "neuro": "Neurology",
+            "neurology": "Neurology",
+            "ortho": "Orthopedics",
+            "orthopedics": "Orthopedics",
+            "peds": "Pediatrics",
+            "pediatrics": "Pediatrics",
+            "psych": "Psychiatry",
+            "psychiatry": "Psychiatry",
+            "ob": "Obstetrics",
+            "obgyn": "Obstetrics/Gynecology",
+            "ob/gyn": "Obstetrics/Gynecology",
+            "surgery": "Surgery",
+            "surg": "Surgery",
+            "radiology": "Radiology",
+            "rad": "Radiology",
+            "oncology": "Oncology",
+            "onc": "Oncology",
         }
 
         for key, value in dept_map.items():

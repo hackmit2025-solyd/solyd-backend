@@ -118,6 +118,7 @@ class SourceDocument(BaseModel):
 
 class OntologyTerm(BaseModel):
     """Medical ontology term from standard vocabularies"""
+
     system: str  # SNOMED, ICD10, LOINC, RxNorm, etc.
     code: str
     name: str
@@ -128,6 +129,7 @@ class OntologyTerm(BaseModel):
 
 class ExternalResource(BaseModel):
     """External medical resources like guidelines, papers, etc."""
+
     id: str
     title: str
     source: str  # PubMed, MSD Manual, UpToDate, etc.

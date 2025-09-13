@@ -1,6 +1,7 @@
 """
 Conflict resolution API for handling contradictory medical data
 """
+
 from fastapi import APIRouter, HTTPException
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
@@ -14,25 +15,38 @@ router = APIRouter()
 
 class ConflictData(BaseModel):
     """Conflicting data requiring resolution"""
+
     entity_type: str = Field(..., description="Type of entity (symptom, disease, etc.)")
     entity_id: str = Field(..., description="Entity identifier")
-    conflicting_values: List[Dict[str, Any]] = Field(..., description="List of conflicting values with sources")
+    conflicting_values: List[Dict[str, Any]] = Field(
+        ..., description="List of conflicting values with sources"
+    )
     context: Optional[Dict[str, Any]] = Field(None, description="Additional context")
 
 
 class ConflictResolution(BaseModel):
     """Resolution for a conflict"""
+
     conflict_id: str = Field(..., description="Conflict identifier")
-    resolution_type: str = Field(..., description="Type of resolution: accept_one, merge, reject_all, defer")
-    selected_value: Optional[Dict[str, Any]] = Field(None, description="Selected or merged value")
+    resolution_type: str = Field(
+        ..., description="Type of resolution: accept_one, merge, reject_all, defer"
+    )
+    selected_value: Optional[Dict[str, Any]] = Field(
+        None, description="Selected or merged value"
+    )
     rationale: Optional[str] = Field(None, description="Reason for resolution")
-    resolver_id: Optional[str] = Field(None, description="ID of person/system resolving")
+    resolver_id: Optional[str] = Field(
+        None, description="ID of person/system resolving"
+    )
 
 
 class ConflictReview(BaseModel):
     """Human review input for conflict"""
+
     decision: str = Field(..., description="accept, reject, or modify")
-    value: Optional[Dict[str, Any]] = Field(None, description="Modified or selected value")
+    value: Optional[Dict[str, Any]] = Field(
+        None, description="Modified or selected value"
+    )
     notes: Optional[str] = Field(None, description="Review notes")
     reviewer_id: str = Field(..., description="Reviewer identifier")
 
@@ -53,7 +67,7 @@ def create_conflict(conflict_data: ConflictData) -> Dict[str, Any]:
         "status": "pending",
         "created_at": datetime.now().isoformat(),
         "auto_resolution": None,
-        "human_review": None
+        "human_review": None,
     }
 
     # Attempt automatic resolution
@@ -69,7 +83,7 @@ def create_conflict(conflict_data: ConflictData) -> Dict[str, Any]:
         "conflict_id": conflict_id,
         "status": conflict["status"],
         "auto_resolution": auto_resolution,
-        "requires_human_review": auto_resolution is None
+        "requires_human_review": auto_resolution is None,
     }
 
 
@@ -98,7 +112,9 @@ def get_pending_conflicts(limit: int = 10) -> List[Dict[str, Any]]:
 
 
 @router.post("/conflict/{conflict_id}/resolve")
-def resolve_conflict(conflict_id: str, resolution: ConflictResolution) -> Dict[str, Any]:
+def resolve_conflict(
+    conflict_id: str, resolution: ConflictResolution
+) -> Dict[str, Any]:
     """Resolve a conflict"""
 
     conflict = session_manager.get_conflict(conflict_id)
@@ -111,7 +127,7 @@ def resolve_conflict(conflict_id: str, resolution: ConflictResolution) -> Dict[s
         "selected_value": resolution.selected_value,
         "rationale": resolution.rationale,
         "resolver_id": resolution.resolver_id,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
     session_manager.resolve_conflict(conflict_id, resolution_data)
@@ -119,7 +135,7 @@ def resolve_conflict(conflict_id: str, resolution: ConflictResolution) -> Dict[s
     return {
         "conflict_id": conflict_id,
         "status": "resolved",
-        "resolution": resolution_data
+        "resolution": resolution_data,
     }
 
 
@@ -137,7 +153,7 @@ def review_conflict(conflict_id: str, review: ConflictReview) -> Dict[str, Any]:
         "value": review.value,
         "notes": review.notes,
         "reviewer_id": review.reviewer_id,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
     conflict["human_review"] = review_data
@@ -153,15 +169,11 @@ def review_conflict(conflict_id: str, review: ConflictReview) -> Dict[str, Any]:
             resolution_type="human_review",
             selected_value=review.value,
             rationale=review.notes,
-            resolver_id=review.reviewer_id
+            resolver_id=review.reviewer_id,
         )
         return resolve_conflict(conflict_id, resolution)
 
-    return {
-        "conflict_id": conflict_id,
-        "status": "reviewed",
-        "review": review_data
-    }
+    return {"conflict_id": conflict_id, "status": "reviewed", "review": review_data}
 
 
 @router.post("/conflict/batch")
@@ -174,16 +186,13 @@ def create_batch_conflicts(conflicts: List[ConflictData]) -> Dict[str, Any]:
             result = create_conflict(conflict_data)
             results.append(result)
         except Exception as e:
-            results.append({
-                "error": str(e),
-                "entity_id": conflict_data.entity_id
-            })
+            results.append({"error": str(e), "entity_id": conflict_data.entity_id})
 
     return {
         "total": len(conflicts),
         "created": len([r for r in results if "conflict_id" in r]),
         "errors": len([r for r in results if "error" in r]),
-        "results": results
+        "results": results,
     }
 
 
@@ -198,7 +207,7 @@ def _attempt_auto_resolution(conflict_data: ConflictData) -> Optional[Dict[str, 
         return {
             "method": "identical_after_normalization",
             "selected_value": normalized_values[0],
-            "confidence": 1.0
+            "confidence": 1.0,
         }
 
     # Rule 2: For timestamps, prefer most recent
@@ -207,12 +216,12 @@ def _attempt_auto_resolution(conflict_data: ConflictData) -> Optional[Dict[str, 
             sorted_values = sorted(
                 values,
                 key=lambda x: x.get("timestamp", x.get("date", "")),
-                reverse=True
+                reverse=True,
             )
             return {
                 "method": "most_recent",
                 "selected_value": sorted_values[0],
-                "confidence": 0.9
+                "confidence": 0.9,
             }
 
     # Rule 3: For numerical values, check if within acceptable range
@@ -224,14 +233,16 @@ def _attempt_auto_resolution(conflict_data: ConflictData) -> Optional[Dict[str, 
 
         if numeric_values:
             mean_val = sum(numeric_values) / len(numeric_values)
-            std_dev = (sum((x - mean_val) ** 2 for x in numeric_values) / len(numeric_values)) ** 0.5
+            std_dev = (
+                sum((x - mean_val) ** 2 for x in numeric_values) / len(numeric_values)
+            ) ** 0.5
 
             # If standard deviation is low, values are consistent
             if std_dev < mean_val * 0.1:  # Within 10% variation
                 return {
                     "method": "statistical_consensus",
                     "selected_value": {"value": mean_val, "std_dev": std_dev},
-                    "confidence": 0.85
+                    "confidence": 0.85,
                 }
 
     # Rule 4: For boolean negation conflicts, defer to human
@@ -256,11 +267,13 @@ def _attempt_auto_resolution(conflict_data: ConflictData) -> Optional[Dict[str, 
         best_value, best_score = source_scores[0]
 
         # If best source is significantly more reliable
-        if best_score > 0.8 and (len(source_scores) == 1 or best_score - source_scores[1][1] > 0.2):
+        if best_score > 0.8 and (
+            len(source_scores) == 1 or best_score - source_scores[1][1] > 0.2
+        ):
             return {
                 "method": "source_reliability",
                 "selected_value": best_value,
-                "confidence": best_score
+                "confidence": best_score,
             }
 
     # No automatic resolution possible
@@ -282,9 +295,11 @@ def _normalize_value(value: Dict[str, Any]) -> Dict[str, Any]:
             "mg/l": "mg/L",
             "mg/dl": "mg/dL",
             "g/dl": "g/dL",
-            "mmol/l": "mmol/L"
+            "mmol/l": "mmol/L",
         }
-        normalized["unit"] = unit_map.get(normalized["unit"].lower(), normalized["unit"])
+        normalized["unit"] = unit_map.get(
+            normalized["unit"].lower(), normalized["unit"]
+        )
 
     return normalized
 
@@ -332,11 +347,7 @@ def _calculate_source_reliability(source: Dict[str, Any]) -> float:
 def _analyze_conflict(conflict: Dict[str, Any]) -> Dict[str, Any]:
     """Analyze conflict to provide insights"""
 
-    analysis = {
-        "severity": "low",
-        "type": "unknown",
-        "recommendations": []
-    }
+    analysis = {"severity": "low", "type": "unknown", "recommendations": []}
 
     values = conflict.get("conflicting_values", [])
     entity_type = conflict.get("entity_type", "")
@@ -344,27 +355,41 @@ def _analyze_conflict(conflict: Dict[str, Any]) -> Dict[str, Any]:
     # Determine conflict type
     if len(values) == 2:
         has_true_negation = any(v.get("negation") for v in values)
-        has_false_negation = any(not v.get("negation") for v in values if "negation" in v)
+        has_false_negation = any(
+            not v.get("negation") for v in values if "negation" in v
+        )
         if has_true_negation and has_false_negation:
             analysis["type"] = "negation_conflict"
             analysis["severity"] = "high"
-            analysis["recommendations"].append("Review clinical context for symptom presence/absence")
+            analysis["recommendations"].append(
+                "Review clinical context for symptom presence/absence"
+            )
 
     # Check for measurement conflicts
     if entity_type in ["lab_result", "vital_sign"]:
-        numeric_values = [v.get("value") for v in values if isinstance(v.get("value"), (int, float))]
+        numeric_values = [
+            v.get("value") for v in values if isinstance(v.get("value"), (int, float))
+        ]
         if numeric_values:
             range_val = max(numeric_values) - min(numeric_values)
             mean_val = sum(numeric_values) / len(numeric_values)
             if range_val > mean_val * 0.5:  # >50% variation
                 analysis["type"] = "measurement_discrepancy"
                 analysis["severity"] = "medium"
-                analysis["recommendations"].append("Verify measurement units and timing")
+                analysis["recommendations"].append(
+                    "Verify measurement units and timing"
+                )
 
     # Check for temporal conflicts
-    timestamps = [v.get("timestamp") or v.get("date") for v in values if v.get("timestamp") or v.get("date")]
+    timestamps = [
+        v.get("timestamp") or v.get("date")
+        for v in values
+        if v.get("timestamp") or v.get("date")
+    ]
     if len(set(timestamps)) > 1:
         analysis["has_temporal_variation"] = True
-        analysis["recommendations"].append("Consider most recent value if clinically appropriate")
+        analysis["recommendations"].append(
+            "Consider most recent value if clinically appropriate"
+        )
 
     return analysis

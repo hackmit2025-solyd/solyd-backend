@@ -1,138 +1,216 @@
+"""
+Initialize Neo4j schema with UUID-based constraints and indexes
+"""
+
 from app.db.neo4j import Neo4jConnection
-from typing import List, Tuple
 
 
-class GraphSchemaInitializer:
-    def __init__(self, neo4j_conn: Neo4jConnection):
-        self.neo4j = neo4j_conn
+def drop_all_constraints_and_indexes(neo4j: Neo4jConnection):
+    """Drop all existing constraints and indexes"""
+    print("Dropping all existing constraints and indexes...")
 
-    def get_constraints(self) -> List[Tuple[str, str]]:
-        """Define all unique constraints for nodes"""
-        return [
-            ("Patient", "id"),
-            ("Encounter", "id"),
-            ("Disease", "code"),
-            ("TestResult", "id"),
-            ("Medication", "code"),
-            ("Procedure", "code"),
-            ("Clinician", "id"),
-            ("Guideline", "id"),
-            ("SourceDocument", "source_id"),
-            ("Assertion", "assertion_id"),
-        ]
+    # Get all constraints
+    try:
+        constraints = neo4j.execute_query("SHOW CONSTRAINTS")
+        for constraint in constraints:
+            name = constraint.get("name")
+            if name:
+                try:
+                    neo4j.execute_query(f"DROP CONSTRAINT {name}")
+                    print(f"  Dropped constraint: {name}")
+                except Exception as e:
+                    print(f"  Failed to drop constraint {name}: {e}")
+    except Exception as e:
+        print(f"  Error listing constraints: {e}")
 
-    def get_indexes(self) -> List[Tuple[str, str]]:
-        """Define all indexes for efficient querying"""
-        return [
-            ("Symptom", "code"),
-            ("Symptom", "name"),
-            ("Test", "loinc"),
-            ("Test", "name"),
-            ("Disease", "name"),
-            ("Medication", "name"),
-            ("Procedure", "name"),
-            ("Encounter", "date"),
-            ("Patient", "sex"),
-            ("SourceDocument", "source_type"),
-        ]
+    # Get all indexes
+    try:
+        indexes = neo4j.execute_query("SHOW INDEXES")
+        for index in indexes:
+            name = index.get("name")
+            # Skip constraint-backed indexes and token lookup indexes
+            if (
+                name
+                and not name.startswith("constraint_")
+                and "token_lookup" not in name
+            ):
+                try:
+                    neo4j.execute_query(f"DROP INDEX {name}")
+                    print(f"  Dropped index: {name}")
+                except Exception as e:
+                    print(f"  Failed to drop index {name}: {e}")
+    except Exception as e:
+        print(f"  Error listing indexes: {e}")
 
-    def create_constraints(self):
-        """Create unique constraints in Neo4j"""
-        constraints = self.get_constraints()
-        results = []
 
-        for label, property in constraints:
+def create_uuid_constraints(neo4j: Neo4jConnection):
+    """Create UUID uniqueness constraints for all node types"""
+    print("\nCreating UUID constraints...")
+
+    node_labels = [
+        "Patient",
+        "Encounter",
+        "Clinician",
+        "TestResult",  # Instance nodes
+        "Symptom",
+        "Disease",
+        "Test",
+        "Medication",
+        "Procedure",
+        "Guideline",  # Catalog nodes
+    ]
+
+    for label in node_labels:
+        try:
+            constraint_name = f"{label.lower()}_uuid_unique"
             query = f"""
-            CREATE CONSTRAINT {label.lower()}_{property}_unique 
-            IF NOT EXISTS 
-            FOR (n:{label}) 
-            REQUIRE n.{property} IS UNIQUE
+            CREATE CONSTRAINT {constraint_name}
+            IF NOT EXISTS
+            FOR (n:{label})
+            REQUIRE n.uuid IS UNIQUE
             """
-            try:
-                self.neo4j.execute_query(query)
-                results.append(f"✓ Created constraint: {label}.{property}")
-            except Exception as e:
-                if "already exists" in str(e).lower():
-                    results.append(f"○ Constraint exists: {label}.{property}")
-                else:
-                    results.append(f"✗ Failed constraint: {label}.{property} - {e}")
+            neo4j.execute_query(query)
+            print(f"  ✓ Created UUID constraint for {label}")
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                print(f"  ○ UUID constraint already exists for {label}")
+            else:
+                print(f"  ✗ Failed to create UUID constraint for {label}: {e}")
 
-        return results
 
-    def create_indexes(self):
-        """Create indexes in Neo4j"""
-        indexes = self.get_indexes()
-        results = []
+def create_catalog_indexes(neo4j: Neo4jConnection):
+    """Create indexes for catalog node lookups"""
+    print("\nCreating catalog node indexes...")
 
-        for label, property in indexes:
+    # Code+System composite indexes for catalog nodes
+    catalog_composite = [
+        ("Disease", ["code", "system"]),
+        ("Medication", ["code", "system"]),
+        ("Procedure", ["code", "system"]),
+    ]
+
+    for label, properties in catalog_composite:
+        try:
+            index_name = f"{label.lower()}_{'_'.join(properties)}_idx"
+            prop_list = ", ".join([f"n.{prop}" for prop in properties])
             query = f"""
-            CREATE INDEX {label.lower()}_{property}_index 
-            IF NOT EXISTS 
-            FOR (n:{label}) 
-            ON (n.{property})
+            CREATE INDEX {index_name}
+            IF NOT EXISTS
+            FOR (n:{label})
+            ON ({prop_list})
             """
-            try:
-                self.neo4j.execute_query(query)
-                results.append(f"✓ Created index: {label}.{property}")
-            except Exception as e:
-                if "already exists" in str(e).lower():
-                    results.append(f"○ Index exists: {label}.{property}")
-                else:
-                    results.append(f"✗ Failed index: {label}.{property} - {e}")
+            neo4j.execute_query(query)
+            print(f"  ✓ Created composite index for {label} on {properties}")
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                print(f"  ○ Composite index already exists for {label} on {properties}")
+            else:
+                print(f"  ✗ Failed to create composite index for {label}: {e}")
 
-        return results
+    # Single property indexes
+    single_indexes = [
+        ("Symptom", "code"),
+        ("Symptom", "system"),
+        ("Symptom", "name"),
+        ("Disease", "code"),
+        ("Disease", "name"),
+        ("Test", "name"),
+        ("Test", "loinc"),
+        ("Medication", "code"),
+        ("Medication", "name"),
+        ("Procedure", "code"),
+        ("Procedure", "name"),
+        ("Clinician", "name"),
+        ("Guideline", "title"),
+        ("Encounter", "date"),
+        ("TestResult", "time"),
+        ("Patient", "sex"),
+    ]
 
-    def initialize_schema(self):
-        """Initialize complete graph schema"""
-        print("Initializing Neo4j graph schema...")
-
-        # Create constraints
-        print("\nCreating constraints:")
-        constraint_results = self.create_constraints()
-        for result in constraint_results:
-            print(f"  {result}")
-
-        # Create indexes
-        print("\nCreating indexes:")
-        index_results = self.create_indexes()
-        for result in index_results:
-            print(f"  {result}")
-
-        print("\nSchema initialization complete!")
-        return {"constraints": constraint_results, "indexes": index_results}
-
-    def verify_schema(self):
-        """Verify that all constraints and indexes are in place"""
-        # Check constraints
-        constraints_query = "SHOW CONSTRAINTS"
-        constraints = self.neo4j.execute_query(constraints_query)
-
-        # Check indexes
-        indexes_query = "SHOW INDEXES"
-        indexes = self.neo4j.execute_query(indexes_query)
-
-        return {
-            "constraints_count": len(constraints),
-            "indexes_count": len(indexes),
-            "constraints": constraints,
-            "indexes": indexes,
-        }
+    for label, prop in single_indexes:
+        try:
+            index_name = f"{label.lower()}_{prop}_idx"
+            query = f"""
+            CREATE INDEX {index_name}
+            IF NOT EXISTS
+            FOR (n:{label})
+            ON (n.{prop})
+            """
+            neo4j.execute_query(query)
+            print(f"  ✓ Created {prop} index for {label}")
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                print(f"  ○ Index already exists for {label}.{prop}")
+            else:
+                print(f"  ✗ Failed to create index for {label}.{prop}: {e}")
 
 
-def init_graph_schema():
-    """Standalone function to initialize the graph schema"""
-    neo4j_conn = Neo4jConnection()
-    initializer = GraphSchemaInitializer(neo4j_conn)
+def verify_schema(neo4j: Neo4jConnection):
+    """Verify that all constraints and indexes are in place"""
+    print("\nVerifying schema...")
 
     try:
-        result = initializer.initialize_schema()
-        verification = initializer.verify_schema()
-        result["verification"] = verification
-        return result
+        # Check constraints
+        constraints = neo4j.execute_query("SHOW CONSTRAINTS")
+        uuid_constraints = [c for c in constraints if "uuid" in c.get("properties", [])]
+        print(f"  Found {len(uuid_constraints)} UUID constraints")
+
+        # Check indexes
+        indexes = neo4j.execute_query("SHOW INDEXES")
+        user_indexes = [
+            i
+            for i in indexes
+            if not i.get("name", "").startswith("constraint_")
+            and "token_lookup" not in i.get("name", "")
+        ]
+        print(f"  Found {len(user_indexes)} user-defined indexes")
+
+        return {
+            "uuid_constraints": len(uuid_constraints),
+            "indexes": len(user_indexes),
+            "total_constraints": len(constraints),
+            "total_indexes": len(indexes),
+        }
+    except Exception as e:
+        print(f"  Error verifying schema: {e}")
+        return {}
+
+
+def init_schema():
+    """Initialize the complete Neo4j schema"""
+    neo4j = Neo4jConnection()
+
+    try:
+        print("=" * 60)
+        print("NEO4J SCHEMA INITIALIZATION")
+        print("=" * 60)
+
+        # Drop all existing constraints and indexes
+        drop_all_constraints_and_indexes(neo4j)
+
+        # Create new UUID-based constraints
+        create_uuid_constraints(neo4j)
+
+        # Create catalog lookup indexes
+        create_catalog_indexes(neo4j)
+
+        # Verify the schema
+        stats = verify_schema(neo4j)
+
+        print("\n" + "=" * 60)
+        print("SCHEMA INITIALIZATION COMPLETE!")
+        print(f"UUID Constraints: {stats.get('uuid_constraints', 0)}")
+        print(f"Indexes: {stats.get('indexes', 0)}")
+        print("=" * 60)
+
+        return stats
+
+    except Exception as e:
+        print(f"\n✗ Error initializing schema: {e}")
+        raise
     finally:
-        neo4j_conn.close()
+        neo4j.close()
 
 
 if __name__ == "__main__":
-    # Run schema initialization
-    init_graph_schema()
+    init_schema()

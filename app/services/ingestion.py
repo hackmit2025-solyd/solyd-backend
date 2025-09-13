@@ -93,8 +93,13 @@ class IngestionService:
             # Generate title if not provided
             if not document.title:
                 # Extract first meaningful line or use source ID
-                first_line = document.content.split('\n')[0][:100] if document.content else ""
-                document.title = first_line or f"{document.source_type} Document - {document.source_id}"
+                first_line = (
+                    document.content.split("\n")[0][:100] if document.content else ""
+                )
+                document.title = (
+                    first_line
+                    or f"{document.source_type} Document - {document.source_id}"
+                )
 
             # Create document record
             db_document = Document(

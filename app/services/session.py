@@ -1,6 +1,7 @@
 """
 Redis-based session management for chat and conflict resolution
 """
+
 import redis
 import json
 from typing import Dict, Any, List, Optional
@@ -14,7 +15,9 @@ class SessionManager:
 
     def __init__(self, redis_url: Optional[str] = None):
         """Initialize Redis connection"""
-        redis_url = redis_url or getattr(settings, 'redis_url', 'redis://localhost:6379/0')
+        redis_url = redis_url or getattr(
+            settings, "redis_url", "redis://localhost:6379/0"
+        )
 
         try:
             self.redis_client = redis.from_url(redis_url, decode_responses=True)
@@ -27,8 +30,7 @@ class SessionManager:
             self.enabled = False
             self.memory_store = {}
 
-    def create_session(self, user_id: Optional[str] = None,
-                      ttl_hours: int = 24) -> str:
+    def create_session(self, user_id: Optional[str] = None, ttl_hours: int = 24) -> str:
         """Create a new session"""
         session_id = str(uuid.uuid4())
         session_data = {
@@ -36,7 +38,7 @@ class SessionManager:
             "user_id": user_id,
             "created_at": datetime.now().isoformat(),
             "messages": [],
-            "context": {}
+            "context": {},
         }
 
         self.set_session(session_id, session_data, ttl_hours)
@@ -57,15 +59,14 @@ class SessionManager:
 
         return None
 
-    def set_session(self, session_id: str, data: Dict[str, Any],
-                   ttl_hours: int = 24):
+    def set_session(self, session_id: str, data: Dict[str, Any], ttl_hours: int = 24):
         """Set or update session data"""
         if self.enabled:
             try:
                 self.redis_client.setex(
                     f"session:{session_id}",
                     timedelta(hours=ttl_hours),
-                    json.dumps(data, default=str)
+                    json.dumps(data, default=str),
                 )
             except Exception as e:
                 print(f"Redis set error: {e}")
@@ -74,29 +75,26 @@ class SessionManager:
         else:
             self.memory_store[f"session:{session_id}"] = data
 
-    def add_message(self, session_id: str, role: str, content: str,
-                   metadata: Optional[Dict] = None):
+    def add_message(
+        self, session_id: str, role: str, content: str, metadata: Optional[Dict] = None
+    ):
         """Add a message to session history"""
         session = self.get_session(session_id)
         if not session:
-            session = {
-                "session_id": session_id,
-                "messages": [],
-                "context": {}
-            }
+            session = {"session_id": session_id, "messages": [], "context": {}}
 
         message = {
             "role": role,
             "content": content,
             "timestamp": datetime.now().isoformat(),
-            "metadata": metadata or {}
+            "metadata": metadata or {},
         }
 
         session["messages"].append(message)
 
         # Keep only last N messages based on config
         if len(session["messages"]) > settings.session_max_messages:
-            session["messages"] = session["messages"][-settings.session_max_messages:]
+            session["messages"] = session["messages"][-settings.session_max_messages :]
 
         self.set_session(session_id, session)
 
@@ -128,8 +126,9 @@ class SessionManager:
         return None if key else {}
 
     # Conflict resolution specific methods
-    def store_conflict(self, conflict_id: str, conflict_data: Dict[str, Any],
-                      ttl_hours: int = 72):
+    def store_conflict(
+        self, conflict_id: str, conflict_data: Dict[str, Any], ttl_hours: int = 72
+    ):
         """Store a conflict for human review"""
         key = f"conflict:{conflict_id}"
 
@@ -142,7 +141,7 @@ class SessionManager:
                 self.redis_client.setex(
                     key,
                     timedelta(hours=ttl_hours),
-                    json.dumps(conflict_data, default=str)
+                    json.dumps(conflict_data, default=str),
                 )
                 # Add to conflict queue
                 self.redis_client.lpush("conflict_queue", conflict_id)
@@ -181,7 +180,7 @@ class SessionManager:
                     self.redis_client.setex(
                         f"conflict:{conflict_id}",
                         timedelta(hours=24),  # Keep resolved conflicts for 24h
-                        json.dumps(conflict, default=str)
+                        json.dumps(conflict, default=str),
                     )
                 except Exception as e:
                     print(f"Redis resolve conflict error: {e}")
@@ -222,7 +221,7 @@ class SessionManager:
                 self.redis_client.setex(
                     cache_key,
                     timedelta(seconds=ttl_seconds),
-                    json.dumps(value, default=str)
+                    json.dumps(value, default=str),
                 )
             except Exception as e:
                 print(f"Redis cache set error: {e}")

@@ -1,6 +1,7 @@
 """
 BioPortal API integration for medical ontology mapping
 """
+
 import requests
 from typing import Dict, List, Optional
 from urllib.parse import quote
@@ -15,7 +16,11 @@ class BioPortalClient:
 
     # Ontology acronyms in BioPortal
     ONTOLOGIES = {
-        "symptom": ["SYMP", "SNOMEDCT", "HP"],  # Symptom Ontology, SNOMED, Human Phenotype
+        "symptom": [
+            "SYMP",
+            "SNOMEDCT",
+            "HP",
+        ],  # Symptom Ontology, SNOMED, Human Phenotype
         "disease": ["ICD10", "ICD10CM", "SNOMEDCT", "DOID"],  # Disease ontologies
         "medication": ["RXNORM", "ATC", "CHEBI"],  # Drug ontologies
         "procedure": ["CPT", "SNOMEDCT", "ICD10PCS"],  # Procedure codes
@@ -25,23 +30,30 @@ class BioPortalClient:
 
     def __init__(self, api_key: Optional[str] = None):
         """Initialize with BioPortal API key"""
-        self.api_key = api_key or getattr(settings, 'bioportal_api_key', None)
+        self.api_key = api_key or getattr(settings, "bioportal_api_key", None)
         if not self.api_key:
             # Use demo key with rate limits
             self.api_key = "DEMO_KEY"
 
         self.session = requests.Session()
-        self.session.headers.update({
-            "Authorization": f"apikey token={self.api_key}",
-            "Accept": "application/json"
-        })
+        self.session.headers.update(
+            {
+                "Authorization": f"apikey token={self.api_key}",
+                "Accept": "application/json",
+            }
+        )
 
         # Cache for recent searches
         self.cache = {}
         self.cache_ttl = settings.cache_ttl_seconds
 
-    def search(self, query: str, ontologies: Optional[List[str]] = None,
-              entity_type: Optional[str] = None, limit: int = 10) -> List[Dict]:
+    def search(
+        self,
+        query: str,
+        ontologies: Optional[List[str]] = None,
+        entity_type: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[Dict]:
         """Search for terms across ontologies"""
 
         # Build cache key
@@ -65,14 +77,12 @@ class BioPortalClient:
             "pagesize": limit,
             "include": "prefLabel,synonym,definition,semanticType",
             "require_exact_match": "false",
-            "suggest": "true"
+            "suggest": "true",
         }
 
         try:
             response = self.session.get(
-                f"{self.BASE_URL}/search",
-                params=params,
-                timeout=10
+                f"{self.BASE_URL}/search", params=params, timeout=10
             )
 
             if response.status_code == 200:
@@ -97,14 +107,18 @@ class BioPortalClient:
         for item in data.get("collection", []):
             # Extract relevant fields
             result = {
-                "system": self._get_system_from_ontology(item.get("links", {}).get("ontology")),
+                "system": self._get_system_from_ontology(
+                    item.get("links", {}).get("ontology")
+                ),
                 "code": item.get("@id", "").split("/")[-1],  # Extract code from URI
                 "name": item.get("prefLabel"),
                 "synonyms": item.get("synonym", []),
-                "definition": item.get("definition", [""])[0] if item.get("definition") else None,
+                "definition": item.get("definition", [""])[0]
+                if item.get("definition")
+                else None,
                 "semantic_types": item.get("semanticType", []),
                 "ontology": item.get("links", {}).get("ontology", "").split("/")[-1],
-                "score": item.get("score", 0)
+                "score": item.get("score", 0),
             }
 
             # Clean up code
@@ -136,7 +150,7 @@ class BioPortalClient:
             "HP": "HPO",
             "DOID": "DOID",
             "CHEBI": "CHEBI",
-            "ATC": "ATC"
+            "ATC": "ATC",
         }
 
         return mapping.get(ontology, ontology)
@@ -145,19 +159,21 @@ class BioPortalClient:
         """Get detailed information about a specific term"""
 
         # URL encode the term ID
-        encoded_id = quote(term_id, safe='')
+        encoded_id = quote(term_id, safe="")
 
         try:
             response = self.session.get(
                 f"{self.BASE_URL}/ontologies/{ontology}/classes/{encoded_id}",
-                timeout=10
+                timeout=10,
             )
 
             if response.status_code == 200:
                 data = response.json()
                 return self._parse_term_details(data, ontology)
             else:
-                print(f"Failed to get term {term_id} from {ontology}: {response.status_code}")
+                print(
+                    f"Failed to get term {term_id} from {ontology}: {response.status_code}"
+                )
                 return None
 
         except requests.exceptions.RequestException as e:
@@ -171,13 +187,17 @@ class BioPortalClient:
             "code": data.get("@id", "").split("/")[-1],
             "name": data.get("prefLabel"),
             "synonyms": data.get("synonym", []),
-            "definition": data.get("definition", [""])[0] if data.get("definition") else None,
+            "definition": data.get("definition", [""])[0]
+            if data.get("definition")
+            else None,
             "parents": [p.split("/")[-1] for p in data.get("parents", [])],
             "semantic_types": data.get("semanticType", []),
-            "ontology": ontology
+            "ontology": ontology,
         }
 
-    def get_recommendations(self, text: str, entity_type: Optional[str] = None) -> List[Dict]:
+    def get_recommendations(
+        self, text: str, entity_type: Optional[str] = None
+    ) -> List[Dict]:
         """Get ontology term recommendations for free text using BioPortal Annotator"""
 
         # Use the Annotator service for better context understanding
@@ -191,7 +211,7 @@ class BioPortalClient:
             "minimum_match_length": str(settings.bioportal_min_match_length),
             "exclude_numbers": "false",
             "whole_word_only": "true",
-            "longest_only": "true"
+            "longest_only": "true",
         }
 
         # Add ontology filter if entity type specified
@@ -200,9 +220,7 @@ class BioPortalClient:
 
         try:
             response = self.session.post(
-                f"{self.BASE_URL}/annotator",
-                data=params,
-                timeout=15
+                f"{self.BASE_URL}/annotator", data=params, timeout=15
             )
 
             if response.status_code == 200:
@@ -238,9 +256,13 @@ class BioPortalClient:
                 "code": term_id.split("/")[-1],
                 "name": annotated_class.get("prefLabel"),
                 "matched_text": annotation.get("annotations", [{}])[0].get("text", ""),
-                "match_type": annotation.get("annotations", [{}])[0].get("matchType", ""),
+                "match_type": annotation.get("annotations", [{}])[0].get(
+                    "matchType", ""
+                ),
                 "confidence": self._calculate_confidence(annotation),
-                "ontology": annotated_class.get("links", {}).get("ontology", "").split("/")[-1]
+                "ontology": annotated_class.get("links", {})
+                .get("ontology", "")
+                .split("/")[-1],
             }
 
             results.append(result)
