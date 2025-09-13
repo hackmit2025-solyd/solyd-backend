@@ -75,7 +75,7 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
         resolved_entities = []
         for entity_type, entities in normalized.items():
             for entity in entities:
-                resolution = resolution_service.resolve_entity(entity_type, entity)
+                resolution = resolution_service.resolve_entity(entity_type, entity, document.source_id)
                 resolution["entity_type"] = entity_type
                 resolved_entities.append(resolution)
 
@@ -156,7 +156,7 @@ def upload_document_with_s3(
         resolved_entities = []
         for entity_type, entities in normalized.items():
             for entity in entities:
-                resolution = resolution_service.resolve_entity(entity_type, entity)
+                resolution = resolution_service.resolve_entity(entity_type, entity, document.source_id)
                 resolution["entity_type"] = entity_type
                 resolved_entities.append(resolution)
 

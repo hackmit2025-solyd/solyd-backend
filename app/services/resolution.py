@@ -1,4 +1,4 @@
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from app.db.neo4j import Neo4jConnection
 
 
@@ -6,7 +6,8 @@ class ResolutionService:
     def __init__(self, neo4j_conn: Neo4jConnection):
         self.neo4j = neo4j_conn
 
-    def resolve_entity(self, entity_type: str, entity_data: Dict) -> Dict[str, Any]:
+    def resolve_entity(self, entity_type: str, entity_data: Dict,
+                      source_id: Optional[str] = None) -> Dict[str, Any]:
         """Resolve whether an entity matches existing nodes or is new"""
         # Get potential matches from graph
         matches = self._find_potential_matches(entity_type, entity_data)
@@ -15,7 +16,7 @@ class ResolutionService:
             return {
                 "decision": "new",
                 "entity": entity_data,
-                "to_node_id": self._generate_node_id(entity_type, entity_data),
+                "to_node_id": self._generate_node_id(entity_type, entity_data, source_id),
                 "score": 1.0,
             }
 
@@ -41,7 +42,7 @@ class ResolutionService:
             return {
                 "decision": "new",
                 "entity": entity_data,
-                "to_node_id": self._generate_node_id(entity_type, entity_data),
+                "to_node_id": self._generate_node_id(entity_type, entity_data, source_id),
                 "score": 1.0 - best_match["score"],
             }
 
@@ -132,18 +133,14 @@ class ResolutionService:
 
         return score / comparisons if comparisons > 0 else 0.0
 
-    def _generate_node_id(self, entity_type: str, entity_data: Dict) -> str:
-        """Generate a new node ID for an entity"""
-        if "id" in entity_data:
-            return entity_data["id"]
-        elif "code" in entity_data:
-            return entity_data["code"]
-        elif "name" in entity_data:
-            return f"{entity_type}:{entity_data['name'].replace(' ', '_')}"
-        else:
-            import time
+    def _generate_node_id(self, entity_type: str, entity_data: Dict,
+                         source_id: Optional[str] = None) -> str:
+        """Generate a new node ID for an entity using centralized ID generator"""
+        from app.services.id_generator import id_generator
 
-            return f"{entity_type}:{int(time.time() * 1000)}"
+        # Use the centralized ID generator for consistent ID generation
+        # This is especially important for encounters
+        return id_generator.generate_entity_id(entity_type, entity_data, source_id)
 
     def _get_node_label(self, entity_type: str) -> str:
         """Map entity type to Neo4j node label"""

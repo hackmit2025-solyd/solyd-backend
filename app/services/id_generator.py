@@ -36,6 +36,10 @@ class IDGenerator:
                           source_id: Optional[str] = None) -> str:
         """Generate a consistent ID for an entity"""
 
+        # Special handling for encounters - ALWAYS generate new ID
+        if entity_type == "encounter":
+            return self._generate_encounter_id(entity_data, source_id)
+
         # If entity already has an ID, validate and return it
         if "id" in entity_data and entity_data["id"]:
             return self._validate_id(entity_type, entity_data["id"])
@@ -57,8 +61,8 @@ class IDGenerator:
                 name_hash = hashlib.md5(entity_data["name"].lower().encode()).hexdigest()[:8]
                 return f"{prefix}_{name_hash}"
 
-        # For temporal entities, include timestamp
-        if entity_type in ["encounter", "test_result", "assertion"]:
+        # For temporal entities (excluding encounter)
+        if entity_type in ["test_result", "assertion"]:
             timestamp = entity_data.get("time") or entity_data.get("date")
             if timestamp:
                 if isinstance(timestamp, str):
@@ -70,19 +74,7 @@ class IDGenerator:
                 else:
                     timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
 
-                # For encounters, include patient context to ensure uniqueness
-                if entity_type == "encounter":
-                    # Include patient ID, department, or any unique context
-                    patient_id = entity_data.get("patient_id", "")
-                    dept = entity_data.get("dept", "")
-                    reason = entity_data.get("reason", "")
-
-                    # Create hash from unique combination
-                    context_str = f"{patient_id}_{dept}_{reason}_{source_id or ''}"
-                    context_hash = hashlib.md5(context_str.encode()).hexdigest()[:8]
-                    return f"{prefix}_{timestamp_str}_{context_hash}"
-
-                # Add source context if available for other temporal entities
+                # Add source context if available
                 if source_id:
                     source_hash = hashlib.md5(source_id.encode()).hexdigest()[:4]
                     return f"{prefix}_{timestamp_str}_{source_hash}"
@@ -90,6 +82,36 @@ class IDGenerator:
 
         # Default: sequential ID with timestamp
         return self._generate_sequential_id(prefix)
+
+    def _generate_encounter_id(self, entity_data: Dict[str, Any],
+                              source_id: Optional[str] = None) -> str:
+        """Generate unique encounter ID based on all available context"""
+        prefix = self.PREFIXES["encounter"]
+
+        # Collect all meaningful attributes for uniqueness
+        components = []
+
+        # Always include source if available
+        if source_id:
+            components.append(f"src:{source_id}")
+
+        # Include all available encounter attributes
+        for key in ["patient_id", "date", "time", "dept", "type", "reason", "provider", "location"]:
+            if key in entity_data and entity_data[key]:
+                components.append(f"{key}:{entity_data[key]}")
+
+        # If we have an existing ID, include it to maintain consistency
+        if "id" in entity_data and entity_data["id"] and not entity_data["id"].startswith(prefix):
+            components.append(f"orig:{entity_data['id']}")
+
+        # Create deterministic hash from all components
+        if components:
+            content_hash = hashlib.sha256("|".join(sorted(components)).encode()).hexdigest()[:12]
+        else:
+            # Fallback to timestamp-based unique ID
+            content_hash = f"{int(time.time() * 1000000)}"[:12]
+
+        return f"{prefix}_{content_hash}"
 
     def _validate_id(self, entity_type: str, existing_id: str) -> str:
         """Validate and potentially reformat an existing ID"""
