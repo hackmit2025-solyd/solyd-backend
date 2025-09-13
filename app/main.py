@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.db.neo4j import Neo4jConnection
+from app.db.database import init_db
 from app.api import graph, chat, visualization, ingest
 
 
@@ -11,9 +12,16 @@ from app.api import graph, chat, visualization, ingest
 async def lifespan(app: FastAPI):
     # Startup
     print("Starting Medical Knowledge Graph Backend...")
+
+    # Initialize PostgreSQL database
+    init_db()
+
+    # Initialize Neo4j connection
     neo4j_conn = Neo4jConnection()
     app.state.neo4j = neo4j_conn
+
     yield
+
     # Shutdown
     print("Shutting down...")
     neo4j_conn.close()

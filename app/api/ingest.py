@@ -1,22 +1,43 @@
 from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, File
-from typing import Dict, List
+from typing import Dict, List, Optional
 from app.services.ingestion import IngestionService
 from app.services.extraction import ExtractionService
 from app.services.resolution import ResolutionService
 from app.models.schemas import DocumentUpload, ExtractionRequest, ChunkData
 from app.db.neo4j import Neo4jConnection
+from app.db.database import get_db
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 router = APIRouter()
 
 
-def get_services(request: Request) -> Dict:
+class PresignedUrlRequest(BaseModel):
+    filename: str
+    content_type: str = "application/octet-stream"
+
+
+class PresignedUrlResponse(BaseModel):
+    url: str
+    fields: Dict[str, str]
+    file_key: str
+
+
+class SearchRequest(BaseModel):
+    query: str
+    limit: int = 10
+    similarity_threshold: float = 0.7
+
+
+def get_services(request: Request, db: Session = Depends(get_db)) -> Dict:
     """Get all required services"""
     neo4j_conn = request.app.state.neo4j
     return {
-        "ingestion": IngestionService(),
+        "ingestion": IngestionService(db_session=db),
         "extraction": ExtractionService(),
         "resolution": ResolutionService(neo4j_conn),
         "neo4j": neo4j_conn,
+        "db": db,
     }
 
 
@@ -29,7 +50,7 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
     neo4j = services["neo4j"]
 
     try:
-        # Step 1: Process document into chunks
+        # Step 1: Process document into chunks with PostgreSQL storage
         processed = ingestion_service.process_document(document)
 
         # Step 2: Extract entities from each chunk
@@ -77,24 +98,128 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
         raise HTTPException(status_code=500, detail=f"Document processing failed: {e}")
 
 
+@router.post("/presigned-url")
+def get_presigned_upload_url(
+    request: PresignedUrlRequest, services: Dict = Depends(get_services)
+):
+    """Get a presigned URL for uploading a file to S3"""
+    ingestion_service = services["ingestion"]
+    try:
+        result = ingestion_service.get_presigned_upload_url(
+            request.filename, request.content_type
+        )
+        return PresignedUrlResponse(**result)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate presigned URL: {e}"
+        )
+
+
 @router.post("/file")
 def upload_file(
     file: UploadFile = File(...),
     source_type: str = "PDF",
     services: Dict = Depends(get_services),
 ):
-    """Upload a file for processing"""
+    """Upload a file for processing (direct upload)"""
+    ingestion_service = services["ingestion"]
     try:
         content = file.file.read().decode("utf-8")
+
+        # Generate S3 key for the file
+        s3_result = ingestion_service.get_presigned_upload_url(
+            file.filename, file.content_type or "application/octet-stream"
+        )
+        s3_file_key = s3_result["file_key"]
+
         document = DocumentUpload(
             source_id=file.filename,
             source_type=source_type,
             title=file.filename,
             content=content,
         )
-        return upload_document(document, services)
+
+        # Process with S3 reference
+        return upload_document_with_s3(document, s3_file_key, services)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File upload failed: {e}")
+
+
+@router.post("/document-with-s3")
+def upload_document_with_s3(
+    document: DocumentUpload,
+    s3_file_key: Optional[str] = None,
+    services: Dict = Depends(get_services),
+):
+    """Upload and process a document with S3 reference"""
+    ingestion_service = services["ingestion"]
+    extraction_service = services["extraction"]
+    resolution_service = services["resolution"]
+    neo4j = services["neo4j"]
+
+    try:
+        # Step 1: Process document into chunks with PostgreSQL storage and embeddings
+        processed = ingestion_service.process_document(document, s3_file_key)
+
+        # Step 2: Extract entities from each chunk
+        chunk_extractions = []
+        for chunk_dict in processed["chunks"]:
+            chunk = ChunkData(**chunk_dict)
+            extraction = extraction_service.extract_entities_from_chunk(
+                chunk, document.source_id
+            )
+            chunk_extractions.append(extraction)
+
+        # Step 3: Merge extractions
+        merged = ingestion_service.merge_extractions(chunk_extractions)
+
+        # Step 4: Normalize entities
+        normalized = extraction_service.normalize_entities(merged["entities"])
+
+        # Step 5: Resolve entities
+        resolved_entities = []
+        for entity_type, entities in normalized.items():
+            for entity in entities:
+                resolution = resolution_service.resolve_entity(entity_type, entity)
+                resolution["entity_type"] = entity_type
+                resolved_entities.append(resolution)
+
+        # Step 6: Create upsert plan
+        upsert_plan = resolution_service.create_upsert_plan(
+            resolved_entities, merged["assertions"]
+        )
+
+        # Step 7: Execute upserts to Neo4j
+        upsert_results = _execute_upsert_plan(neo4j, upsert_plan)
+
+        return {
+            "source_id": document.source_id,
+            "s3_file_key": s3_file_key,
+            "chunks_processed": len(processed["chunks"]),
+            "entities_extracted": sum(
+                len(entities) for entities in normalized.values()
+            ),
+            "assertions_created": len(merged["assertions"]),
+            "upsert_results": upsert_results,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Document processing failed: {e}")
+
+
+@router.post("/search")
+def search_similar_chunks(
+    request: SearchRequest, services: Dict = Depends(get_services)
+):
+    """Search for similar chunks using vector similarity"""
+    ingestion_service = services["ingestion"]
+    try:
+        results = ingestion_service.search_similar_chunks(
+            request.query, request.limit, request.similarity_threshold
+        )
+        return {"query": request.query, "results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {e}")
 
 
 @router.post("/extract")
