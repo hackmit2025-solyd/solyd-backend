@@ -1,5 +1,8 @@
 #!/bin/bash
 
+
+docker compose down --volumes --remove-orphans
+
 # Start docker services
 echo "Starting Neo4j and PostgreSQL..."
 docker-compose up -d

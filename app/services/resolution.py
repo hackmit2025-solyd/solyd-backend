@@ -1,4 +1,4 @@
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from app.db.neo4j import Neo4jConnection
 
 
@@ -7,7 +7,7 @@ class ResolutionService:
         self.neo4j = neo4j_conn
 
     def resolve_entity(
-        self, entity_type: str, entity_data: Dict, source_id: Optional[str] = None
+        self, entity_type: str, entity_data: Dict
     ) -> Dict[str, Any]:
         """
         Resolve whether an entity matches existing nodes or is new.

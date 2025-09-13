@@ -42,7 +42,7 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
         for entity_type, entities in normalized.items():
             for entity in entities:
                 resolution = resolution_service.resolve_entity(
-                    entity_type, entity, document.source_id
+                    entity_type, entity
                 )
                 resolution["entity_type"] = entity_type
                 resolved_entities.append(resolution)
@@ -56,7 +56,6 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
         upsert_results = _execute_upsert_plan(neo4j, upsert_plan)
 
         return {
-            "source_id": document.source_id,
             "entities_extracted": sum(
                 len(entities) for entities in normalized.values()
             ),
