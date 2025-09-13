@@ -38,7 +38,7 @@ class BioPortalClient:
 
         # Cache for recent searches
         self.cache = {}
-        self.cache_ttl = 3600  # 1 hour
+        self.cache_ttl = settings.cache_ttl_seconds
 
     def search(self, query: str, ontologies: Optional[List[str]] = None,
               entity_type: Optional[str] = None, limit: int = 10) -> List[Dict]:
@@ -188,7 +188,7 @@ class BioPortalClient:
             "class_hierarchy_max_level": "1",
             "expand_mappings": "false",
             "stop_words": "true",
-            "minimum_match_length": "3",
+            "minimum_match_length": str(settings.bioportal_min_match_length),
             "exclude_numbers": "false",
             "whole_word_only": "true",
             "longest_only": "true"

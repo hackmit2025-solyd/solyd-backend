@@ -188,7 +188,7 @@ Response format: {{"system": "...", "code": "...", "name": "...", "confidence": 
 
         try:
             response = self.client.messages.create(
-                model="claude-3-haiku-20240307",
+                model=settings.claude_model,
                 max_tokens=200,
                 temperature=0.1,
                 messages=[{"role": "user", "content": prompt}]

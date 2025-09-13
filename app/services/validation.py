@@ -6,6 +6,7 @@ import re
 from typing import Dict, Any, Optional
 from jsonschema import ValidationError, Draft7Validator
 import time
+from app.config import settings
 
 
 class SchemaValidator:
@@ -163,7 +164,7 @@ class SchemaValidator:
         }
 
     def validate_with_retry(self, data: Any, schema_name: str,
-                          max_retries: int = 3,
+                          max_retries: Optional[int] = None,
                           repair_callback: Optional[callable] = None) -> Dict[str, Any]:
         """Validate JSON with retry and repair attempts"""
         if schema_name not in self.validators:
@@ -171,6 +172,7 @@ class SchemaValidator:
 
         validator = self.validators[schema_name]
         last_error = None
+        max_retries = max_retries or settings.max_retry_attempts
 
         for attempt in range(max_retries):
             try:

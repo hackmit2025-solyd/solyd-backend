@@ -32,6 +32,29 @@ class Settings(BaseSettings):
     # Redis
     redis_url: Optional[str] = "redis://localhost:6379"
 
+    # Model Configuration
+    claude_model: str = "claude-3-haiku-20240307"
+    voyage_embedding_model: str = "voyage-3-large"
+    embedding_dimension: int = 1024
+
+    # Service Configuration
+    max_retry_attempts: int = 3
+    cache_ttl_seconds: int = 3600  # 1 hour
+    session_max_messages: int = 100
+    conflict_ttl_hours: int = 72
+
+    # BioPortal Configuration
+    bioportal_base_url: str = "https://data.bioontology.org"
+    bioportal_min_match_length: int = 3
+
+    # Document Processing
+    tika_server_url: str = "http://localhost:9998"
+    max_chunk_size: int = 1000  # characters
+    chunk_overlap: int = 100  # characters
+
+    # Batch Processing
+    neo4j_batch_size: int = 100
+
     # App
     app_name: str = "Medical Knowledge Graph"
     app_version: str = "0.1.0"

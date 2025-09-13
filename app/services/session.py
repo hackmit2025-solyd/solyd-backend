@@ -94,9 +94,9 @@ class SessionManager:
 
         session["messages"].append(message)
 
-        # Keep only last 100 messages
-        if len(session["messages"]) > 100:
-            session["messages"] = session["messages"][-100:]
+        # Keep only last N messages based on config
+        if len(session["messages"]) > settings.session_max_messages:
+            session["messages"] = session["messages"][-settings.session_max_messages:]
 
         self.set_session(session_id, session)
 

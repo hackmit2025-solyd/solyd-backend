@@ -14,7 +14,7 @@ class EmbeddingService:
             try:
                 voyageai.api_key = settings.voyage_api_key
                 self.client = voyageai.Client()
-                self.model = "voyage-3-large"  # 1024 dimension model
+                self.model = settings.voyage_embedding_model
                 logger.info("Voyage AI client initialized successfully")
             except Exception as e:
                 logger.warning(f"Failed to initialize Voyage AI client: {e}")

@@ -144,7 +144,7 @@ Include any relevant medical relationships or patterns found in the data."""
 
         try:
             response = self.client.messages.create(
-                model="claude-3-haiku-20240307",
+                model=settings.claude_model,
                 max_tokens=500,
                 temperature=0.3,
                 messages=[{"role": "user", "content": prompt}],
@@ -286,7 +286,7 @@ Return only the Cypher query, no explanation."""
 
     try:
         response = chat_service.client.messages.create(
-            model="claude-3-haiku-20240307",
+            model=settings.claude_model,
             max_tokens=200,
             temperature=0.1,
             messages=[{"role": "user", "content": prompt}],
