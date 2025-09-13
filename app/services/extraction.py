@@ -54,7 +54,7 @@ class ExtractionService:
 
 ## GRAPH SCHEMA - ENTITY TYPES:
 - Patient: person receiving medical care (id, name, dob, sex, mrn)
-- Encounter: medical visit/interaction (id, date, type, dept, reason)
+- Encounter: medical visit/interaction (id, date, type, dept, reason, patient_id)
 - Symptom: clinical manifestation (name, code, severity, onset, body_location)
 - Disease: diagnosis or condition (code, name, status)
 - Test: laboratory or diagnostic test (name, loinc, category)
@@ -97,7 +97,7 @@ Return a JSON object with this structure:
       {{"id": "P123", "name": "John Doe", "sex": "M", "dob": "1980-01-15"}}
     ],
     "encounters": [
-      {{"id": "E567", "date": "2025-09-13", "dept": "Internal Medicine"}}
+      {{"id": "E567", "date": "2025-09-13", "dept": "Internal Medicine", "patient_id": "P123"}}
     ],
     "symptoms": [
       {{"name": "fever", "code": "SNOMED:386661006"}},
@@ -241,14 +241,16 @@ Return only valid JSON, no additional text."""
         """Normalize a single entity"""
         # Add normalization logic here
         # For MVP, just pass through with basic validation
+        from app.services.id_generator import id_generator
 
         if entity_type == "patients":
             if "id" not in entity:
-                entity["id"] = f"P_{datetime.now().timestamp()}"
+                entity["id"] = id_generator.generate_entity_id("patient", entity)
 
         elif entity_type == "encounters":
             if "id" not in entity:
-                entity["id"] = f"E_{datetime.now().timestamp()}"
+                # Use id_generator which now includes patient context
+                entity["id"] = id_generator.generate_entity_id("encounter", entity)
             if "date" in entity and isinstance(entity["date"], str):
                 # Ensure date format
                 try:

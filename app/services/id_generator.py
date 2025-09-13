@@ -70,7 +70,19 @@ class IDGenerator:
                 else:
                     timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
 
-                # Add source context if available
+                # For encounters, include patient context to ensure uniqueness
+                if entity_type == "encounter":
+                    # Include patient ID, department, or any unique context
+                    patient_id = entity_data.get("patient_id", "")
+                    dept = entity_data.get("dept", "")
+                    reason = entity_data.get("reason", "")
+
+                    # Create hash from unique combination
+                    context_str = f"{patient_id}_{dept}_{reason}_{source_id or ''}"
+                    context_hash = hashlib.md5(context_str.encode()).hexdigest()[:8]
+                    return f"{prefix}_{timestamp_str}_{context_hash}"
+
+                # Add source context if available for other temporal entities
                 if source_id:
                     source_hash = hashlib.md5(source_id.encode()).hexdigest()[:4]
                     return f"{prefix}_{timestamp_str}_{source_hash}"
