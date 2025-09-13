@@ -260,6 +260,19 @@ def _execute_upsert_plan(neo4j: Neo4jConnection, plan: Dict) -> Dict:
             id_prop, id_val = node_plan["id_property"]
             props = node_plan["properties"]
 
+            # Use the resolved node_id instead of id_property for merging
+            # This ensures uniqueness based on our ID generation logic
+            node_id = node_plan.get("node_id")
+            if node_id:
+                # Override the id value with the generated unique ID
+                id_val = node_id
+                props["id"] = node_id  # Ensure the property is also updated
+
+            # Debug: Log encounter nodes
+            if label == "Encounter":
+                print(f"DEBUG Encounter MERGE: id_prop={id_prop}, id_val={id_val}, node_id={node_id}")
+                print(f"DEBUG Encounter props: {props}")
+
             # Build MERGE query
             query = f"""
             MERGE (n:{label} {{{id_prop}: $id_val}})
