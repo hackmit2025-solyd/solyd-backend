@@ -1,6 +1,5 @@
 import pytest
 from unittest.mock import MagicMock
-from app.services.query import QueryService
 
 
 class TestQueryService:

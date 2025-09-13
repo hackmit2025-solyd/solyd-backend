@@ -1,5 +1,3 @@
-import pytest
-from app.services.ingestion import IngestionService
 from app.models.schemas import DocumentUpload, ChunkData
 
 
@@ -151,4 +149,6 @@ class TestIngestionService:
 
         assert len(result) == 1  # Consolidated into one
         assert set(result[0]["chunk_ids"]) == {"C1", "C2"}
-        assert abs(result[0]["confidence"] - 0.85) < 0.0001  # Average of 0.8 and 0.9 with floating point tolerance
+        assert (
+            abs(result[0]["confidence"] - 0.85) < 0.0001
+        )  # Average of 0.8 and 0.9 with floating point tolerance

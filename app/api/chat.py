@@ -10,6 +10,7 @@ from typing import Dict, List, Any, Optional
 import json
 import uuid
 from datetime import datetime
+from pydantic import BaseModel as PydanticBaseModel
 from app.services.query import QueryService
 from app.models.schemas import ChatRequest, ChatResponse
 from app.config import settings
@@ -30,6 +31,9 @@ class ChatService:
         self, message: str, context: Optional[Dict] = None
     ) -> Dict[str, Any]:
         """Generate response using Claude and graph data"""
+        # context parameter can be used for future enhancements
+        _ = context
+
         # Extract medical entities from the message
         entities = self._extract_entities_from_message(message)
 
@@ -252,11 +256,16 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, request: Req
         await websocket.close()
 
 
+class CypherQueryRequest(PydanticBaseModel):
+    query: str
+
+
 @router.post("/query-to-cypher")
 def natural_language_to_cypher(
-    query: str, chat_service: ChatService = Depends(get_chat_service)
+    request: CypherQueryRequest, chat_service: ChatService = Depends(get_chat_service)
 ):
     """Convert natural language query to Cypher"""
+    query = request.query
     if not chat_service.client:
         # Return mock Cypher for testing
         return {

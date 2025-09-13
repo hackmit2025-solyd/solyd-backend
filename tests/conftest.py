@@ -162,8 +162,8 @@ def sample_extraction_result():
     }
 
 
-@pytest.fixture(scope="function", autouse=True)
-def setup_test_neo4j(monkeypatch):
+@pytest.fixture(scope="function")
+def setup_test_neo4j():
     """Setup test Neo4j connection for all tests"""
     mock_neo4j = Mock(spec=Neo4jConnection)
     mock_neo4j.execute_query = MagicMock(return_value=[])

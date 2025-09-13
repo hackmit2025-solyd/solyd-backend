@@ -1,4 +1,3 @@
-import pytest
 import json
 from unittest.mock import MagicMock
 from app.services.extraction import ExtractionService

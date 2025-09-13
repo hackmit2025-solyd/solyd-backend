@@ -1,5 +1,4 @@
-import pytest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
 
 class TestIngestAPI:
@@ -9,44 +8,43 @@ class TestIngestAPI:
         with patch("app.api.ingest.IngestionService") as mock_ingestion:
             with patch("app.api.ingest.ExtractionService") as mock_extraction:
                 with patch("app.api.ingest.ResolutionService") as mock_resolution:
-                    
                     # Setup mock returns
                     mock_ingestion_instance = mock_ingestion.return_value
                     mock_extraction_instance = mock_extraction.return_value
                     mock_resolution_instance = mock_resolution.return_value
-                    
+
                     mock_ingestion_instance.process_document.return_value = {
                         "source": {"source_id": "test_001"},
                         "chunks": [{"chunk_id": "C1", "seq": 1, "text": "Test"}],
                         "chunk_count": 1,
                     }
-                    
+
                     mock_extraction_instance.extract_entities_from_chunk.return_value = {
                         "entities": {"patients": [{"id": "P123"}]},
                         "assertions": [],
                     }
-                    
+
                     mock_ingestion_instance.merge_extractions.return_value = {
                         "entities": {"patients": [{"id": "P123"}]},
                         "assertions": [],
                     }
-                    
+
                     mock_extraction_instance.normalize_entities.return_value = {
                         "patients": [{"id": "P123"}]
                     }
-                    
+
                     mock_resolution_instance.resolve_entity.return_value = {
                         "decision": "new",
                         "entity": {"id": "P123"},
                         "entity_type": "patients",
                         "to_node_id": "P123",
                     }
-                    
+
                     mock_resolution_instance.create_upsert_plan.return_value = {
                         "nodes": [{"label": "Patient", "id_property": ("id", "P123")}],
                         "relationships": [],
                     }
-                    
+
                     response = client.post(
                         "/api/ingest/document",
                         json={
@@ -56,7 +54,7 @@ class TestIngestAPI:
                             "content": "Test content",
                         },
                     )
-                    
+
                     assert response.status_code == 200
                     data = response.json()
                     assert data["source_id"] == "test_001"
@@ -66,10 +64,9 @@ class TestIngestAPI:
         """Test POST /api/ingest/extract"""
         with patch("app.api.ingest.ExtractionService") as mock_extraction:
             with patch("app.api.ingest.IngestionService") as mock_ingestion:
-                
                 mock_extraction_instance = mock_extraction.return_value
                 mock_ingestion_instance = mock_ingestion.return_value
-                
+
                 mock_extraction_instance.extract_entities_from_chunk.return_value = {
                     "entities": {
                         "patients": [{"id": "P123", "name": "John Doe"}],
@@ -84,7 +81,7 @@ class TestIngestAPI:
                         }
                     ],
                 }
-                
+
                 mock_ingestion_instance.merge_extractions.return_value = {
                     "entities": {
                         "patients": [{"id": "P123", "name": "John Doe"}],
@@ -99,7 +96,7 @@ class TestIngestAPI:
                         }
                     ],
                 }
-                
+
                 response = client.post(
                     "/api/ingest/extract",
                     json={
@@ -114,7 +111,7 @@ class TestIngestAPI:
                         ],
                     },
                 )
-                
+
                 assert response.status_code == 200
                 data = response.json()
                 assert "entities" in data
@@ -136,7 +133,7 @@ class TestIngestAPI:
                 # Second document fails
                 Exception("Processing failed"),
             ]
-            
+
             response = client.post(
                 "/api/ingest/bulk",
                 json=[
@@ -154,7 +151,7 @@ class TestIngestAPI:
                     },
                 ],
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert data["total"] == 2

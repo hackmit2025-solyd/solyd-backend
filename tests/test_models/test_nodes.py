@@ -156,7 +156,9 @@ class TestNodeModels:
     def test_assertion_confidence_validation(self):
         """Test Assertion confidence validation"""
         # Valid confidence
-        assertion = Assertion(assertion_id="A1", predicate="HAS_SYMPTOM", confidence=0.5)
+        assertion = Assertion(
+            assertion_id="A1", predicate="HAS_SYMPTOM", confidence=0.5
+        )
         assert assertion.confidence == 0.5
 
         # Invalid confidence (>1.0)

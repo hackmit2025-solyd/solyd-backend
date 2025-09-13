@@ -1,6 +1,4 @@
-import pytest
 from unittest.mock import MagicMock
-from app.services.resolution import ResolutionService
 
 
 class TestResolutionService:

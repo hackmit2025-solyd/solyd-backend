@@ -1,5 +1,3 @@
-import pytest
-import json
 from unittest.mock import MagicMock, patch
 
 
@@ -14,12 +12,12 @@ class TestChatAPI:
                 "evidence": [{"source": "EMR", "confidence": 0.95}],
             }
             mock_instance.sessions = {}
-            
+
             response = client.post(
                 "/api/chat/message",
                 json={"message": "What is fever?", "session_id": "test_session"},
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert "response" in data
@@ -36,12 +34,12 @@ class TestChatAPI:
                 "evidence": [],
             }
             mock_instance.sessions = {}
-            
+
             response = client.post(
                 "/api/chat/message",
                 json={"message": "Test message"},
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert "session_id" in data
@@ -57,9 +55,9 @@ class TestChatAPI:
                     {"role": "assistant", "content": "Hi there!"},
                 ]
             }
-            
+
             response = client.get("/api/chat/session/test_session")
-            
+
             assert response.status_code == 200
             data = response.json()
             assert data["session_id"] == "test_session"
@@ -71,9 +69,9 @@ class TestChatAPI:
         with patch("app.api.chat.ChatService") as mock_chat_service:
             mock_instance = mock_chat_service.return_value
             mock_instance.sessions = {}
-            
+
             response = client.get("/api/chat/session/nonexistent")
-            
+
             assert response.status_code == 404
 
     def test_query_to_cypher(self, client):
@@ -88,29 +86,31 @@ class TestChatAPI:
                     )
                 ]
             )
-            
+
             response = client.post(
                 "/api/chat/query-to-cypher",
                 json={"query": "Show me all patients and their encounters"},
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert "cypher" in data
             assert "MATCH" in data["cypher"]
-            assert data["natural_language"] == "Show me all patients and their encounters"
+            assert (
+                data["natural_language"] == "Show me all patients and their encounters"
+            )
 
     def test_query_to_cypher_without_client(self, client):
         """Test POST /api/chat/query-to-cypher without Claude client"""
         with patch("app.api.chat.ChatService") as mock_chat_service:
             mock_instance = mock_chat_service.return_value
             mock_instance.client = None  # No API key
-            
+
             response = client.post(
                 "/api/chat/query-to-cypher",
                 json={"query": "Show me all patients"},
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert "cypher" in data
