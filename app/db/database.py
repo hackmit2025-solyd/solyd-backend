@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
 from app.config import settings
@@ -23,7 +23,7 @@ def init_db():
     try:
         # Create pgvector extension if not exists
         with engine.connect() as conn:
-            conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             conn.commit()
 
         # Create all tables

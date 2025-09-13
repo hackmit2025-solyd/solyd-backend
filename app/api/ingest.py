@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import Dict, List, Optional
 from app.services.ingestion import IngestionService
 from app.services.extraction import ExtractionService
@@ -13,14 +13,15 @@ router = APIRouter()
 
 
 class PresignedUrlRequest(BaseModel):
-    filename: str
     content_type: str = "application/octet-stream"
+    file_extension: str = ""  # e.g., ".pdf", ".txt"
 
 
 class PresignedUrlResponse(BaseModel):
     url: str
     fields: Dict[str, str]
     file_key: str
+    file_uuid: str
 
 
 class SearchRequest(BaseModel):
@@ -106,7 +107,7 @@ def get_presigned_upload_url(
     ingestion_service = services["ingestion"]
     try:
         result = ingestion_service.get_presigned_upload_url(
-            request.filename, request.content_type
+            request.content_type, request.file_extension
         )
         return PresignedUrlResponse(**result)
     except Exception as e:
@@ -115,34 +116,7 @@ def get_presigned_upload_url(
         )
 
 
-@router.post("/file")
-def upload_file(
-    file: UploadFile = File(...),
-    source_type: str = "PDF",
-    services: Dict = Depends(get_services),
-):
-    """Upload a file for processing (direct upload)"""
-    ingestion_service = services["ingestion"]
-    try:
-        content = file.file.read().decode("utf-8")
-
-        # Generate S3 key for the file
-        s3_result = ingestion_service.get_presigned_upload_url(
-            file.filename, file.content_type or "application/octet-stream"
-        )
-        s3_file_key = s3_result["file_key"]
-
-        document = DocumentUpload(
-            source_id=file.filename,
-            source_type=source_type,
-            title=file.filename,
-            content=content,
-        )
-
-        # Process with S3 reference
-        return upload_document_with_s3(document, s3_file_key, services)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"File upload failed: {e}")
+# Direct file upload endpoint removed - use presigned URL instead
 
 
 @router.post("/document-with-s3")

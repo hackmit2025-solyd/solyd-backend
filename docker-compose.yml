@@ -11,7 +11,7 @@ services:
       - neo4j_data:/data
 
   postgres:
-    image: postgres:latest
+    image: pgvector/pgvector:pg17
     container_name: postgres
     environment:
       - POSTGRES_USER=postgres

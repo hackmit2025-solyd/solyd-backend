@@ -123,11 +123,19 @@ class IngestionService:
             raise
 
     def get_presigned_upload_url(
-        self, filename: str, content_type: str = "application/octet-stream"
+        self, content_type: str = "application/octet-stream", file_extension: str = ""
     ) -> Dict[str, str]:
-        """Generate presigned URL for file upload"""
-        file_key = f"documents/{uuid.uuid4()}/{filename}"
-        return self.s3_service.generate_presigned_upload_url(file_key, content_type)
+        """Generate presigned URL for file upload with UUID as key"""
+        # Use UUID as the file key
+        file_uuid = str(uuid.uuid4())
+        file_key = (
+            f"documents/{file_uuid}{file_extension}"
+            if file_extension
+            else f"documents/{file_uuid}"
+        )
+        result = self.s3_service.generate_presigned_upload_url(file_key, content_type)
+        result["file_uuid"] = file_uuid
+        return result
 
     def search_similar_chunks(
         self, query: str, limit: int = 10, similarity_threshold: float = 0.7
