@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     aws_region: str = "us-east-1"
     s3_bucket_name: str = "medical-knowledge-graph"
 
+    # BioPortal API
+    bioportal_api_key: Optional[str] = None
+
+    # Redis
+    redis_url: Optional[str] = "redis://localhost:6379"
+
     # App
     app_name: str = "Medical Knowledge Graph"
     app_version: str = "0.1.0"
