@@ -282,9 +282,12 @@ def _execute_upsert_plan(neo4j: Neo4jConnection, plan: Dict) -> Dict:
             props = rel_plan["properties"]
 
             # Build MERGE query for relationship
+            # Try multiple ID properties since different node types use different IDs
             query = f"""
-            MATCH (from {{id: $from_id}})
-            MATCH (to {{id: $to_id}})
+            MATCH (from)
+            WHERE from.id = $from_id OR from.name = $from_id OR from.code = $from_id
+            MATCH (to)
+            WHERE to.id = $to_id OR to.name = $to_id OR to.code = $to_id
             MERGE (from)-[r:{rel_type}]->(to)
             SET r += $props
             RETURN r
@@ -296,6 +299,8 @@ def _execute_upsert_plan(neo4j: Neo4jConnection, plan: Dict) -> Dict:
             results["relationships_created"] += 1
 
         except Exception as e:
-            results["errors"].append(f"Relationship upsert failed: {e}")
+            error_msg = f"Relationship upsert failed - Type: {rel_type}, From: {from_node}, To: {to_node}, Error: {e}"
+            print(error_msg)
+            results["errors"].append(error_msg)
 
     return results
