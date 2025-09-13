@@ -50,7 +50,7 @@ class ExtractionService:
 
     def _build_extraction_prompt(self, text: str) -> str:
         """Build prompt for entity extraction"""
-        return f"""Extract medical entities and relationships from the following clinical text.
+        return f"""Extract medical entities and relationships from the following text.
 
 ## GRAPH SCHEMA - ENTITY TYPES:
 - Patient: person receiving medical care (id, name, dob, sex, mrn)
@@ -59,35 +59,36 @@ class ExtractionService:
 - Disease: diagnosis or condition (code, name, status)
 - Test: laboratory or diagnostic test (name, loinc, category)
 - TestResult: test outcome (id, test, value, unit, flag, time)
-- Medication: prescribed drug (code, name, dose, route, frequency)
-- Clinician: healthcare provider (id, name, specialty, npi)
-- Procedure: medical procedure performed (code, name, cpt)
+- Medication: pharmaceutical compound or drug (code, name, dose, route, frequency)
+- Clinician: healthcare provider or researcher (id, name, specialty, npi)
+- Procedure: medical procedure or intervention (code, name, cpt)
 
 ## GRAPH SCHEMA - RELATIONSHIP TYPES (Predicates):
 CRITICAL - Use ONLY these predicate types for assertions:
 
-1. Core Clinical Relationships:
-   - HAS_ENCOUNTER: Patient → Encounter (patient had a visit)
-   - HAS_SYMPTOM: Encounter → Symptom (symptoms during visit)
-   - DIAGNOSED_AS: Encounter → Disease (diagnosis made)
-   - PRESCRIBED: Encounter → Medication (medications prescribed)
-   - ORDERED_TEST: Encounter → Test (tests ordered)
-   - YIELDED: Test → TestResult (test produced result)
-   - PERFORMED: Encounter → Procedure (procedure done)
-   - TREATED_BY: Encounter → Clinician (provider who treated)
+1. Clinical Relationships:
+   - HAS_ENCOUNTER: Patient → Encounter (connects patient to visit)
+   - HAS_SYMPTOM: Patient/Encounter → Symptom (symptom manifestation)
+   - DIAGNOSED_AS: Patient/Encounter → Disease (diagnosis association)
+   - PRESCRIBED: Encounter/Clinician → Medication (medication prescription)
+   - ORDERED_TEST: Encounter/Clinician → Test (test ordering)
+   - YIELDED: Test → TestResult (test result association)
+   - PERFORMED: Encounter/Clinician → Procedure (procedure execution)
+   - TREATED_BY: Patient/Encounter → Clinician (care provision)
 
-2. Patient Relationships:
-   - ALLERGIC_TO: Patient → Medication/Substance (known allergies)
-   - REFERRED_TO: Patient/Encounter → Clinician (referral made)
+2. Direct Entity Relationships:
+   - ALLERGIC_TO: Patient → Medication/Substance (allergy association)
+   - REFERRED_TO: Patient/Encounter/Clinician → Clinician (referral)
 
-3. Medication Relationships:
-   - CONTRAINDICATED: Medication → Disease (drug contraindications)
+3. Medical Knowledge Relationships:
+   - CONTRAINDICATED: Medication → Disease (contraindication)
 
-IMPORTANT LINKING RULES:
-1. ALWAYS create HAS_ENCOUNTER to link Patient to Encounter
-2. Link all clinical findings to the Encounter (not directly to Patient)
-3. Connect Test to TestResult via YIELDED
-4. Include confidence scores (0.0-1.0) for uncertain relationships
+FLEXIBLE LINKING RULES:
+1. Connect entities based on context - not all texts will have patients or encounters
+2. For clinical narratives: link findings to encounters when present
+3. For research/guidelines: directly connect entities as appropriate
+4. Connect Test to TestResult via YIELDED when both present
+5. Include confidence scores (0.0-1.0) for uncertain relationships
 
 Return a JSON object with this structure:
 {{
