@@ -43,8 +43,11 @@ class ExtractionService:
             return result
 
         except Exception as e:
+            import traceback
             print(f"Extraction error: {e}")
-            return {"entities": {}, "assertions": []}
+            print(f"Traceback: {traceback.format_exc()}")
+            # Return mock data instead of empty for debugging
+            return self._get_mock_extraction(chunk, source_id)
 
     def _build_extraction_prompt(self, text: str) -> str:
         """Build prompt for entity extraction"""

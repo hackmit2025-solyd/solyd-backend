@@ -1,3 +1,5 @@
+import sys
+from loguru import logger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -7,19 +9,28 @@ from app.db.neo4j import Neo4jConnection
 from app.db.database import init_db
 from app.api import graph, chat, visualization, ingest
 
+# --- Loguru Configuration ---
+logger.remove()
+logger.add(
+    sys.stderr,
+    level="INFO",
+    format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+)
+# --- End Loguru Configuration ---
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    print("Starting Medical Knowledge Graph Backend...")
+    logger.info("Starting Medical Knowledge Graph Backend...")
 
     # Initialize PostgreSQL database (optional - won't fail if DB is not available)
     try:
         init_db()
-        print("PostgreSQL database initialized successfully")
+        logger.info("PostgreSQL database initialized successfully")
     except Exception as e:
-        print(f"Warning: PostgreSQL initialization failed: {e}")
-        print("Continuing without PostgreSQL support...")
+        logger.warning(f"PostgreSQL initialization failed: {e}")
+        logger.warning("Continuing without PostgreSQL support...")
 
     # Initialize Neo4j connection
     neo4j_conn = Neo4jConnection()
@@ -28,7 +39,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    print("Shutting down...")
+    logger.info("Shutting down...")
     neo4j_conn.close()
 
 
