@@ -39,25 +39,25 @@ class ExtractionService:
 
             # Parse JSON response
             content = response.content[0].text
-            print(f"DEBUG: Raw response length: {len(content)}")
-            print(f"DEBUG: First 500 chars: {content[:500] if content else 'EMPTY'}")
 
             # Try to find JSON in the response
             if not content:
                 print("ERROR: Empty response from Claude")
                 return {"entities": {}, "assertions": []}
 
-            # Look for JSON block in the response
-            json_start = content.find('{')
-            json_end = content.rfind('}') + 1
+            # Remove markdown code block if present
+            if content.startswith("```json"):
+                content = content[7:]  # Remove ```json
+            if content.startswith("```"):
+                content = content[3:]  # Remove ```
+            if content.endswith("```"):
+                content = content[:-3]  # Remove closing ```
 
-            if json_start != -1 and json_end > json_start:
-                json_str = content[json_start:json_end]
-                result = json.loads(json_str)
-            else:
-                print(f"ERROR: No JSON found in response")
-                return {"entities": {}, "assertions": []}
+            # Strip whitespace
+            content = content.strip()
 
+            # Parse JSON
+            result = json.loads(content)
             return result
 
         except json.JSONDecodeError as e:
