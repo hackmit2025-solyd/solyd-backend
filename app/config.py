@@ -6,10 +6,10 @@ class Settings(BaseSettings):
     # Neo4j
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
-    neo4j_password: str = "test"
+    neo4j_password: str = "P@ssw0rd"
 
     # PostgreSQL
-    postgres_url: str = "postgresql://postgres:postgres@localhost:5432/postgres"
+    postgres_url: str = "postgresql://postgres:P@ssw0rd@localhost:5432/postgres"
 
     # Claude API
     anthropic_api_key: Optional[str] = None
