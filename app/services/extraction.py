@@ -39,10 +39,31 @@ class ExtractionService:
 
             # Parse JSON response
             content = response.content[0].text
-            result = json.loads(content)
+            print(f"DEBUG: Raw response length: {len(content)}")
+            print(f"DEBUG: First 500 chars: {content[:500] if content else 'EMPTY'}")
+
+            # Try to find JSON in the response
+            if not content:
+                print("ERROR: Empty response from Claude")
+                return {"entities": {}, "assertions": []}
+
+            # Look for JSON block in the response
+            json_start = content.find('{')
+            json_end = content.rfind('}') + 1
+
+            if json_start != -1 and json_end > json_start:
+                json_str = content[json_start:json_end]
+                result = json.loads(json_str)
+            else:
+                print(f"ERROR: No JSON found in response")
+                return {"entities": {}, "assertions": []}
 
             return result
 
+        except json.JSONDecodeError as e:
+            print(f"JSON parsing error: {e}")
+            print(f"Content that failed to parse: {content[:1000] if 'content' in locals() else 'No content'}")
+            return {"entities": {}, "assertions": []}
         except Exception as e:
             print(f"Extraction error: {e}")
             print(f"Traceback: {traceback.format_exc()}")
