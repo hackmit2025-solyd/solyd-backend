@@ -27,7 +27,7 @@ class ExtractionService:
         try:
             response = self.client.messages.create(
                 model=settings.claude_model,
-                max_tokens=4096,  # Required parameter for Claude API
+                max_tokens=48000,  # Required parameter for Claude API
                 temperature=0.3,
                 messages=[{"role": "user", "content": prompt}],
             )
