@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from app.config import settings
 from app.db.neo4j import Neo4jConnection
 from app.db.database import init_db
-from app.api import graph, visualization, ingest
+from app.api import ingest
 
 # --- Loguru Configuration ---
 logger.remove()
@@ -55,10 +55,6 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(graph.router, prefix="/api/graph", tags=["Graph"])
-app.include_router(
-    visualization.router, prefix="/api/visualization", tags=["Visualization"]
-)
 app.include_router(ingest.router, prefix="/api/ingest", tags=["Ingest"])
 
 
