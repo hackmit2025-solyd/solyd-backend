@@ -52,6 +52,43 @@ class ExtractionService:
         """Build prompt for entity extraction"""
         return f"""Extract medical entities and relationships from the following clinical text.
 
+## GRAPH SCHEMA - ENTITY TYPES:
+- Patient: person receiving medical care (id, name, dob, sex, mrn)
+- Encounter: medical visit/interaction (id, date, type, dept, reason)
+- Symptom: clinical manifestation (name, code, severity, onset, body_location)
+- Disease: diagnosis or condition (code, name, status)
+- Test: laboratory or diagnostic test (name, loinc, category)
+- TestResult: test outcome (id, test, value, unit, flag, time)
+- Medication: prescribed drug (code, name, dose, route, frequency)
+- Clinician: healthcare provider (id, name, specialty, npi)
+- Procedure: medical procedure performed (code, name, cpt)
+
+## GRAPH SCHEMA - RELATIONSHIP TYPES (Predicates):
+CRITICAL - Use ONLY these predicate types for assertions:
+
+1. Core Clinical Relationships:
+   - HAS_ENCOUNTER: Patient → Encounter (patient had a visit)
+   - HAS_SYMPTOM: Encounter → Symptom (symptoms during visit)
+   - DIAGNOSED_AS: Encounter → Disease (diagnosis made)
+   - PRESCRIBED: Encounter → Medication (medications prescribed)
+   - ORDERED_TEST: Encounter → Test (tests ordered)
+   - YIELDED: Test → TestResult (test produced result)
+   - PERFORMED: Encounter → Procedure (procedure done)
+   - TREATED_BY: Encounter → Clinician (provider who treated)
+
+2. Patient Relationships:
+   - ALLERGIC_TO: Patient → Medication/Substance (known allergies)
+   - REFERRED_TO: Patient/Encounter → Clinician (referral made)
+
+3. Medication Relationships:
+   - CONTRAINDICATED: Medication → Disease (drug contraindications)
+
+IMPORTANT LINKING RULES:
+1. ALWAYS create HAS_ENCOUNTER to link Patient to Encounter
+2. Link all clinical findings to the Encounter (not directly to Patient)
+3. Connect Test to TestResult via YIELDED
+4. Include confidence scores (0.0-1.0) for uncertain relationships
+
 Return a JSON object with this structure:
 {{
   "entities": {{
@@ -76,12 +113,25 @@ Return a JSON object with this structure:
       {{"id": "TR001", "test": "CRP", "value": 12.3, "unit": "mg/L", "time": "2025-09-13T10:30:00"}}
     ],
     "medications": [
-      {{"code": "RxNorm:198440", "name": "Acetaminophen", "dose": "500mg"}}
+      {{"code": "RxNorm:198440", "name": "Acetaminophen", "dose": "500mg", "route": "PO", "frequency": "Q6H"}}
+    ],
+    "clinicians": [
+      {{"id": "C789", "name": "Dr. Smith", "specialty": "Internal Medicine", "npi": "1234567890"}}
+    ],
+    "procedures": [
+      {{"code": "CPT:99213", "name": "Office visit", "cpt": "99213"}}
     ]
   }},
   "assertions": [
     {{
       "id": "A1",
+      "predicate": "HAS_ENCOUNTER",
+      "subject_ref": "P123",
+      "object_ref": "E567",
+      "confidence": 1.0
+    }},
+    {{
+      "id": "A2",
       "predicate": "HAS_SYMPTOM",
       "subject_ref": "E567",
       "object_ref": "fever",
@@ -90,12 +140,47 @@ Return a JSON object with this structure:
       "confidence": 0.95
     }},
     {{
-      "id": "A2",
+      "id": "A3",
+      "predicate": "DIAGNOSED_AS",
+      "subject_ref": "E567",
+      "object_ref": "ICD10:J10",
+      "confidence": 0.85
+    }},
+    {{
+      "id": "A4",
+      "predicate": "PRESCRIBED",
+      "subject_ref": "E567",
+      "object_ref": "Acetaminophen",
+      "confidence": 1.0
+    }},
+    {{
+      "id": "A5",
       "predicate": "ORDERED_TEST",
       "subject_ref": "E567",
       "object_ref": "CRP",
       "time": "2025-09-13",
-      "confidence": 0.90
+      "confidence": 1.0
+    }},
+    {{
+      "id": "A6",
+      "predicate": "YIELDED",
+      "subject_ref": "CRP",
+      "object_ref": "TR001",
+      "confidence": 1.0
+    }},
+    {{
+      "id": "A7",
+      "predicate": "TREATED_BY",
+      "subject_ref": "E567",
+      "object_ref": "C789",
+      "confidence": 1.0
+    }},
+    {{
+      "id": "A8",
+      "predicate": "PERFORMED",
+      "subject_ref": "E567",
+      "object_ref": "CPT:99213",
+      "confidence": 1.0
     }}
   ]
 }}
