@@ -189,8 +189,7 @@ Response format: {{"system": "...", "code": "...", "name": "...", "confidence": 
         try:
             response = self.client.messages.create(
                 model=settings.claude_model,
-                max_tokens=200,
-                temperature=0.1,
+                temperature=0.3,
                 messages=[{"role": "user", "content": prompt}]
             )
 

@@ -1,13 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import Dict, List, Optional
-from app.services.ingestion import IngestionService
-from app.services.extraction import ExtractionService
-from app.services.resolution import ResolutionService
-from app.models.schemas import DocumentUpload, ExtractionRequest, ChunkData
-from app.db.neo4j import Neo4jConnection
-from app.db.database import get_db
-from sqlalchemy.orm import Session
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.db.database import get_db
+from app.db.neo4j import Neo4jConnection
+from app.models.schemas import ChunkData, DocumentUpload, ExtractionRequest
+from app.services.extraction import ExtractionService
+from app.services.ingestion import IngestionService
+from app.services.resolution import ResolutionService
 
 router = APIRouter()
 
