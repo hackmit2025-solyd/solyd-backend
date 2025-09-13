@@ -77,6 +77,21 @@ class ResolutionService:
             """
             params = {"code": entity_data.get("code")}
 
+        elif entity_type == "encounters":
+            # Special matching for encounters - check by composite key
+            query = f"""
+            MATCH (n:{label})
+            WHERE n.id = $id
+            OR (n.patient_id = $patient_id AND n.date = $date AND n.dept = $dept)
+            RETURN n
+            """
+            params = {
+                "id": entity_data.get("id"),
+                "patient_id": entity_data.get("patient_id"),
+                "date": entity_data.get("date"),
+                "dept": entity_data.get("dept")
+            }
+
         else:
             query = f"""
             MATCH (n:{label})

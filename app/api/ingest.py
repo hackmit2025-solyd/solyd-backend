@@ -273,14 +273,30 @@ def _execute_upsert_plan(neo4j: Neo4jConnection, plan: Dict) -> Dict:
                 print(f"DEBUG Encounter MERGE: id_prop={id_prop}, id_val={id_val}, node_id={node_id}")
                 print(f"DEBUG Encounter props: {props}")
 
-            # Build MERGE query
-            query = f"""
-            MERGE (n:{label} {{{id_prop}: $id_val}})
-            SET n += $props
-            RETURN n
-            """
+            # Build MERGE query - special handling for encounters
+            if label == "Encounter" and props.get("patient_id") and props.get("date"):
+                # Use composite key for encounters to prevent duplicates
+                query = f"""
+                MERGE (n:{label} {{patient_id: $patient_id, date: $date, dept: $dept}})
+                SET n += $props
+                RETURN n
+                """
+                params = {
+                    "patient_id": props.get("patient_id"),
+                    "date": props.get("date"),
+                    "dept": props.get("dept", "unknown"),
+                    "props": props
+                }
+            else:
+                # Standard MERGE for other entities
+                query = f"""
+                MERGE (n:{label} {{{id_prop}: $id_val}})
+                SET n += $props
+                RETURN n
+                """
+                params = {"id_val": id_val, "props": props}
 
-            neo4j.execute_query(query, {"id_val": id_val, "props": props})
+            neo4j.execute_query(query, params)
             results["nodes_created"] += 1
 
         except Exception as e:

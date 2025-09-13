@@ -36,8 +36,12 @@ class IDGenerator:
                           source_id: Optional[str] = None) -> str:
         """Generate a consistent ID for an entity"""
 
-        # Special handling for encounters - ALWAYS generate new ID
+        # Special handling for encounters - generate deterministic ID if no valid ID exists
         if entity_type == "encounter":
+            # If encounter already has a proper E_ prefixed ID, keep it
+            if "id" in entity_data and entity_data["id"] and entity_data["id"].startswith("E_"):
+                return entity_data["id"]
+            # Otherwise generate a deterministic ID based on content
             return self._generate_encounter_id(entity_data, source_id)
 
         # If entity already has an ID, validate and return it

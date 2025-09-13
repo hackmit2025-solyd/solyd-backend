@@ -90,6 +90,11 @@ FLEXIBLE LINKING RULES:
 4. Connect Test to TestResult via YIELDED when both present
 5. Include confidence scores (0.0-1.0) for uncertain relationships
 
+CRITICAL ENCOUNTER RULES:
+- ALWAYS include patient_id in encounter entities when a patient is identified
+- patient_id is the link between Patient and Encounter entities
+- If an encounter is mentioned with a patient, set encounter.patient_id = patient.id
+
 Return a JSON object with this structure:
 {{
   "entities": {{
@@ -257,6 +262,9 @@ Return only valid JSON, no additional text."""
                     datetime.fromisoformat(entity["date"])
                 except (ValueError, TypeError):
                     entity["date"] = datetime.now().date().isoformat()
+            # Log warning if patient_id is missing - crucial for deduplication
+            if "patient_id" not in entity or not entity["patient_id"]:
+                print(f"WARNING: Encounter missing patient_id: {entity}")
 
         elif entity_type == "symptoms":
             if "name" not in entity:
