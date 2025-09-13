@@ -145,6 +145,7 @@ Include any relevant medical relationships or patterns found in the data."""
         try:
             response = self.client.messages.create(
                 model=settings.claude_model,
+                max_tokens=2048,  # Required parameter for Claude API
                 temperature=0.3,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -286,6 +287,7 @@ Return only the Cypher query, no explanation."""
     try:
         response = chat_service.client.messages.create(
             model=settings.claude_model,
+            max_tokens=1024,  # Required parameter for Claude API
             temperature=0.3,
             messages=[{"role": "user", "content": prompt}],
         )
