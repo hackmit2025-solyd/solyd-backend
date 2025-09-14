@@ -46,20 +46,22 @@ class ExtractionService:
                 return {"entities": {}, "assertions": []}
 
             # Look for JSON block in the response (handles markdown code blocks)
-            json_start = content.find('{')
-            json_end = content.rfind('}') + 1
+            json_start = content.find("{")
+            json_end = content.rfind("}") + 1
 
             if json_start != -1 and json_end > json_start:
                 json_str = content[json_start:json_end]
                 result = json.loads(json_str)
                 return result
             else:
-                print(f"ERROR: No JSON found in response")
+                print("ERROR: No JSON found in response")
                 return {"entities": {}, "assertions": []}
 
         except json.JSONDecodeError as e:
             print(f"JSON parsing error: {e}")
-            print(f"Content that failed to parse: {content[:1000] if 'content' in locals() else 'No content'}")
+            print(
+                f"Content that failed to parse: {content[:1000] if 'content' in locals() else 'No content'}"
+            )
             return {"entities": {}, "assertions": []}
         except Exception as e:
             print(f"Extraction error: {e}")

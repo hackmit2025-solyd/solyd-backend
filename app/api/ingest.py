@@ -1,9 +1,7 @@
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
 
-from app.db.database import get_db
 from app.db.neo4j import Neo4jConnection
 from app.models.schemas import DocumentUpload
 from app.services.extraction import extraction_service
@@ -12,14 +10,13 @@ from app.services.resolution import ResolutionService
 router = APIRouter()
 
 
-def get_services(request: Request, db: Session = Depends(get_db)) -> Dict:
+def get_services(request: Request) -> Dict:
     """Get all required services"""
     neo4j_conn = request.app.state.neo4j
     return {
         "extraction": extraction_service,
         "resolution": ResolutionService(neo4j_conn),
         "neo4j": neo4j_conn,
-        "db": db,
     }
 
 
@@ -41,9 +38,7 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
         resolved_entities = []
         for entity_type, entities in normalized.items():
             for entity in entities:
-                resolution = resolution_service.resolve_entity(
-                    entity_type, entity
-                )
+                resolution = resolution_service.resolve_entity(entity_type, entity)
                 resolution["entity_type"] = entity_type
                 resolved_entities.append(resolution)
 

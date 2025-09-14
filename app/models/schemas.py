@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+
 # Request/Response Schemas
 class DocumentUpload(BaseModel):
     """Document upload model for ingestion"""

@@ -6,9 +6,7 @@ class ResolutionService:
     def __init__(self, neo4j_conn: Neo4jConnection):
         self.neo4j = neo4j_conn
 
-    def resolve_entity(
-        self, entity_type: str, entity_data: Dict
-    ) -> Dict[str, Any]:
+    def resolve_entity(self, entity_type: str, entity_data: Dict) -> Dict[str, Any]:
         """
         Resolve whether an entity matches existing nodes or is new.
         For catalog nodes (Symptom, Disease, Test, Medication, Procedure),
