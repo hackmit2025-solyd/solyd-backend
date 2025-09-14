@@ -215,8 +215,9 @@ def natural_language_query_graph(
 
         # Extract all node variables from MATCH patterns
         node_vars = set()
-        # Find all patterns like (var) or (var:Label)
-        node_patterns = re.findall(r'\((\w+)(?::\w+)?\)', query_base)
+        # Find all patterns like (var), (var:Label), or (var:Label {...})
+        # This regex captures the variable name from various node patterns
+        node_patterns = re.findall(r'\((\w+)(?::\w+)?(?:\s*\{[^}]*\})?\)', query_base)
         node_vars.update(node_patterns)
 
         # Build new Cypher for nodes with labels
