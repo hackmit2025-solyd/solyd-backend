@@ -90,7 +90,7 @@ class ResolutionService:
             return []
 
     def create_upsert_plan(
-        self, resolved_entities: List[Dict], assertions: List[Dict]
+        self, resolved_entities: List[Dict], assertions: List[Dict], document_id: str = None
     ) -> Dict:
         """Create a plan for upserting entities and relationships to Neo4j"""
         plan = {"nodes": [], "relationships": []}

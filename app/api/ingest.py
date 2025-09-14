@@ -201,11 +201,11 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
 
         # Step 10: Create upsert plan
         upsert_plan = resolution_service.create_upsert_plan(
-            resolved_entities, resolved_assertions
+            resolved_entities, resolved_assertions, document_id=str(doc_record.uuid)
         )
 
         # Step 11: Execute upserts to Neo4j
-        upsert_results = _execute_upsert_plan(neo4j, upsert_plan)
+        upsert_results = _execute_upsert_plan(neo4j, upsert_plan, document_id=str(doc_record.uuid))
 
         return {
             "document_id": str(doc_record.uuid),
@@ -349,7 +349,7 @@ def _is_duplicate_assertion(assertion: Dict, existing_assertions: List[Dict]) ->
     return False
 
 
-def _execute_upsert_plan(neo4j: Neo4jConnection, plan: Dict) -> Dict:
+def _execute_upsert_plan(neo4j: Neo4jConnection, plan: Dict, document_id: str = None) -> Dict:
     """Execute the upsert plan against Neo4j"""
     results = {"nodes_created": 0, "relationships_created": 0, "errors": []}
 
@@ -359,6 +359,10 @@ def _execute_upsert_plan(neo4j: Neo4jConnection, plan: Dict) -> Dict:
             label = node_plan["label"]
             uuid = node_plan["uuid"]
             props = node_plan["properties"]
+
+            # Add document_id to properties if provided
+            if document_id:
+                props["document_id"] = document_id
 
             # Build MERGE query using UUID
             query = f"""
@@ -380,6 +384,10 @@ def _execute_upsert_plan(neo4j: Neo4jConnection, plan: Dict) -> Dict:
             from_uuid = rel_plan["from_uuid"]
             to_uuid = rel_plan["to_uuid"]
             props = rel_plan["properties"]
+
+            # Add document_id to relationship properties if provided
+            if document_id:
+                props["document_id"] = document_id
 
             # Build MERGE query for relationship using UUIDs
             query = f"""
