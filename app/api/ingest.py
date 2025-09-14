@@ -66,26 +66,30 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
         # Commit document and chunks to database
         db.commit()
 
-        # Step 5: Extract entities from each chunk and merge
-        all_entities = {}
-        all_assertions = []
+        # Step 5: Extract entities from each chunk with context
+        chunk_extractions = []
+        previous_context = {}
 
-        for chunk_record in chunk_records:
-            extracted = extraction.extract_entities(chunk_record.text)
+        for i, chunk_record in enumerate(chunk_records):
+            # Extract entities with previous context
+            extracted = extraction.extract_entities(
+                chunk_record.text, context=previous_context
+            )
+            chunk_extractions.append(extracted)
 
-            # Merge entities
-            for entity_type, entities in extracted.get("entities", {}).items():
-                if entity_type not in all_entities:
-                    all_entities[entity_type] = []
-                all_entities[entity_type].extend(entities)
+            # Build context for next chunk (key entities from current extraction)
+            if extracted.get("entities"):
+                previous_context = _build_context_from_entities(extracted["entities"])
 
-            # Merge assertions
-            all_assertions.extend(extracted.get("assertions", []))
+        # Step 6: Merge and deduplicate entities across chunks
+        merged_data = _merge_chunk_extractions(chunk_extractions)
+        all_entities = merged_data["entities"]
+        all_assertions = merged_data["assertions"]
 
-        # Step 6: Normalize entities
+        # Step 7: Normalize entities
         normalized = extraction.normalize_entities(all_entities)
 
-        # Step 7: Resolve entities and build reference map
+        # Step 8: Resolve entities and build reference map
         resolved_entities = []
         reference_map = {}  # Map from "type[index]" to UUID
 
@@ -99,7 +103,7 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
                 ref_key = f"{entity_type}[{idx}]"
                 reference_map[ref_key] = resolution["to_node_id"]
 
-        # Step 8: Update assertions with actual UUIDs
+        # Step 9: Update assertions with actual UUIDs
         resolved_assertions = []
         for assertion in all_assertions:
             resolved_assertion = assertion.copy()
@@ -122,12 +126,12 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
 
             resolved_assertions.append(resolved_assertion)
 
-        # Step 9: Create upsert plan
+        # Step 10: Create upsert plan
         upsert_plan = resolution_service.create_upsert_plan(
             resolved_entities, resolved_assertions
         )
 
-        # Step 10: Execute upserts to Neo4j
+        # Step 11: Execute upserts to Neo4j
         upsert_results = _execute_upsert_plan(neo4j, upsert_plan)
 
         return {
@@ -143,6 +147,133 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Document processing failed: {e}")
+
+
+def _build_context_from_entities(entities: Dict) -> Dict:
+    """Build context from extracted entities for next chunk processing"""
+    context = {}
+
+    # Include key instance nodes
+    if "patients" in entities and entities["patients"]:
+        patient = entities["patients"][0]  # Assume first patient is primary
+        context["patient"] = {
+            "name": patient.get("name"),
+            "dob": patient.get("dob"),
+            "sex": patient.get("sex"),
+        }
+
+    if "encounters" in entities and entities["encounters"]:
+        encounter = entities["encounters"][0]  # Most recent encounter
+        context["encounter"] = {
+            "date": encounter.get("date"),
+            "dept": encounter.get("dept"),
+        }
+
+    if "clinicians" in entities and entities["clinicians"]:
+        clinician = entities["clinicians"][0]
+        context["clinician"] = {
+            "name": clinician.get("name"),
+            "specialty": clinician.get("specialty"),
+        }
+
+    return context
+
+
+def _merge_chunk_extractions(chunk_extractions: List[Dict]) -> Dict:
+    """Merge and deduplicate entities from multiple chunk extractions"""
+    merged_entities = {}
+    merged_assertions = []
+    entity_mapping = {}  # Track original to merged index mapping
+
+    for chunk_idx, extraction in enumerate(chunk_extractions):
+        chunk_mapping = {}  # Map from chunk's entity reference to global reference
+
+        for entity_type, entities in extraction.get("entities", {}).items():
+            if entity_type not in merged_entities:
+                merged_entities[entity_type] = []
+
+            for local_idx, entity in enumerate(entities):
+                # Check for duplicates
+                global_idx = _find_duplicate_entity(
+                    entity, entity_type, merged_entities[entity_type]
+                )
+
+                if global_idx == -1:
+                    # New unique entity
+                    global_idx = len(merged_entities[entity_type])
+                    merged_entities[entity_type].append(entity)
+
+                # Track mapping for assertion remapping
+                chunk_ref = f"{entity_type}[{local_idx}]"
+                global_ref = f"{entity_type}[{global_idx}]"
+                chunk_mapping[chunk_ref] = global_ref
+
+        # Remap and merge assertions
+        for assertion in extraction.get("assertions", []):
+            remapped_assertion = assertion.copy()
+
+            # Remap subject and object references
+            if assertion.get("subject_ref") in chunk_mapping:
+                remapped_assertion["subject_ref"] = chunk_mapping[assertion["subject_ref"]]
+            if assertion.get("object_ref") in chunk_mapping:
+                remapped_assertion["object_ref"] = chunk_mapping[assertion["object_ref"]]
+
+            # Check for duplicate assertions
+            if not _is_duplicate_assertion(remapped_assertion, merged_assertions):
+                merged_assertions.append(remapped_assertion)
+
+    return {"entities": merged_entities, "assertions": merged_assertions}
+
+
+def _find_duplicate_entity(entity: Dict, entity_type: str, existing_entities: List[Dict]) -> int:
+    """Find if entity already exists in the list, return index or -1"""
+
+    # Instance nodes: check for duplicates based on key attributes
+    if entity_type == "patients":
+        for idx, existing in enumerate(existing_entities):
+            if (
+                entity.get("name") == existing.get("name")
+                and entity.get("dob") == existing.get("dob")
+            ):
+                return idx
+
+    elif entity_type == "encounters":
+        for idx, existing in enumerate(existing_entities):
+            if (
+                entity.get("date") == existing.get("date")
+                and entity.get("dept") == existing.get("dept")
+            ):
+                return idx
+
+    elif entity_type == "clinicians":
+        for idx, existing in enumerate(existing_entities):
+            if entity.get("name") == existing.get("name"):
+                return idx
+
+    # Catalog nodes: check by code/name
+    elif entity_type in ["symptoms", "diseases", "tests", "medications", "procedures"]:
+        for idx, existing in enumerate(existing_entities):
+            # Check by code if available
+            if entity.get("code") and entity.get("code") == existing.get("code"):
+                if entity.get("system") == existing.get("system"):
+                    return idx
+            # Otherwise check by name
+            elif entity.get("name") and entity.get("name").lower() == existing.get("name", "").lower():
+                return idx
+
+    return -1
+
+
+def _is_duplicate_assertion(assertion: Dict, existing_assertions: List[Dict]) -> bool:
+    """Check if assertion already exists"""
+    for existing in existing_assertions:
+        if (
+            assertion.get("predicate") == existing.get("predicate")
+            and assertion.get("subject_ref") == existing.get("subject_ref")
+            and assertion.get("object_ref") == existing.get("object_ref")
+        ):
+            return True
+    return False
 
 
 def _execute_upsert_plan(neo4j: Neo4jConnection, plan: Dict) -> Dict:

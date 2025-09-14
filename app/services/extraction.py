@@ -25,9 +25,9 @@ class ExtractionService:
 
         return {"chunks": extracted_chunks}
 
-    def extract_entities(self, text: str) -> Dict:
+    def extract_entities(self, text: str, context: Dict = None) -> Dict:
         """Extract medical entities and relationships from text"""
-        prompt = self._build_extraction_prompt(text)
+        prompt = self._build_extraction_prompt(text, context)
 
         try:
             response = self.client.messages.create(
@@ -68,10 +68,23 @@ class ExtractionService:
             print(f"Traceback: {traceback.format_exc()}")
             return {"entities": {}, "assertions": []}
 
-    def _build_extraction_prompt(self, text: str) -> str:
+    def _build_extraction_prompt(self, text: str, context: Dict = None) -> str:
         """Build prompt for entity extraction"""
-        return f"""Extract medical entities and relationships from the following text.
 
+        # Add context if available
+        context_section = ""
+        if context:
+            context_section = "\n## PREVIOUS CONTEXT (entities from earlier chunks):\n"
+            if context.get("patient"):
+                context_section += f"- Patient: {context['patient']}\n"
+            if context.get("encounter"):
+                context_section += f"- Encounter: {context['encounter']}\n"
+            if context.get("clinician"):
+                context_section += f"- Clinician: {context['clinician']}\n"
+            context_section += "\nREFERENCE these entities if they appear in the current text chunk.\n"
+
+        base_prompt = f"""Extract medical entities and relationships from the following text.
+{context_section}
 ## NODE TYPES (with attributes):
 
 ### Instance Nodes (always create new):
@@ -206,6 +219,7 @@ Return a JSON object with this structure:
 
 Text to extract from:
 {text}"""
+        return base_prompt
 
     def merge_chunks(self, chunks: List[Dict]) -> Dict:
         """Merge extracted entities from multiple chunks"""
