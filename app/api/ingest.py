@@ -1,7 +1,10 @@
 from typing import Dict, List
+import tempfile
+import os
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from sqlalchemy.orm import Session
+import PyPDF2
 
 from app.db.neo4j import Neo4jConnection
 from app.db.database import get_db
@@ -26,6 +29,76 @@ def get_services(request: Request, db: Session = Depends(get_db)) -> Dict:
         "neo4j": neo4j_conn,
         "db": db,
     }
+
+
+@router.post("/pdf")
+async def upload_pdf(
+    file: UploadFile = File(...),
+    services: Dict = Depends(get_services)
+):
+    """Upload and process a PDF file"""
+
+    # Validate file type
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="File must be a PDF")
+
+    # Create temporary file
+    temp_file_path = None
+    try:
+        # Save uploaded file to temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
+
+        # Extract text from PDF
+        pdf_text = _extract_text_from_pdf(temp_file_path)
+
+        if not pdf_text.strip():
+            raise HTTPException(status_code=400, detail="Could not extract text from PDF")
+
+        # Process the extracted text using existing document pipeline
+        document_upload = DocumentUpload(text=pdf_text)
+        result = upload_document(document_upload, services)
+
+        # Add PDF filename to result
+        result["source_filename"] = file.filename
+
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF processing failed: {e}")
+
+    finally:
+        # Clean up temporary file
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.unlink(temp_file_path)
+            except Exception as e:
+                print(f"Warning: Could not delete temporary file {temp_file_path}: {e}")
+
+
+def _extract_text_from_pdf(pdf_path: str) -> str:
+    """Extract text content from PDF file"""
+    text = ""
+
+    try:
+        with open(pdf_path, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+
+            # Extract text from all pages
+            for page_num in range(len(pdf_reader.pages)):
+                page = pdf_reader.pages[page_num]
+                page_text = page.extract_text()
+
+                if page_text:
+                    text += page_text + "\n\n"
+
+    except Exception as e:
+        print(f"Error extracting text from PDF: {e}")
+        raise
+
+    return text.strip()
 
 
 @router.post("/document")

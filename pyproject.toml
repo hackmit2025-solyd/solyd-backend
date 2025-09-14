@@ -15,6 +15,7 @@ dependencies = [
     "pgvector>=0.4.1",
     "psycopg2-binary>=2.9.10",
     "pydantic-settings>=2.10.1",
+    "pypdf2>=3.0.0",
     "redis>=6.4.0",
     "sqlalchemy>=2.0.43",
     "tika>=3.1.0",
