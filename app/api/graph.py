@@ -24,8 +24,6 @@ def get_full_graph(
     like D3.js, vis.js, or Cytoscape.js
     """
     try:
-        # Simpler approach: Get nodes and relationships separately
-
         # Get all nodes
         if limit:
             nodes_query = f"MATCH (n) RETURN n LIMIT {limit}"
@@ -35,64 +33,82 @@ def get_full_graph(
         nodes_result = neo4j.execute_query(nodes_query)
 
         # Get all relationships
-        if limit:
-            rels_query = f"""
-            MATCH (n)-[r]->(m)
-            WHERE n.uuid IN $node_ids OR m.uuid IN $node_ids
-            RETURN n.uuid as source, m.uuid as target, type(r) as type, r as rel
-            """
-            node_ids = [node["n"]["uuid"] for node in nodes_result if node.get("n", {}).get("uuid")]
-            rels_result = neo4j.execute_query(rels_query, {"node_ids": node_ids})
+        if limit and nodes_result:
+            # Get relationships for limited nodes
+            node_ids = []
+            for record in nodes_result:
+                if isinstance(record, dict) and "n" in record:
+                    node = record["n"]
+                    if isinstance(node, dict) and "uuid" in node:
+                        node_ids.append(node["uuid"])
+
+            if node_ids:
+                rels_query = """
+                MATCH (n)-[r]->(m)
+                WHERE n.uuid IN $node_ids OR m.uuid IN $node_ids
+                RETURN n.uuid as source, m.uuid as target, type(r) as type, properties(r) as props
+                """
+                rels_result = neo4j.execute_query(rels_query, {"node_ids": node_ids})
+            else:
+                rels_result = []
         else:
+            # Get all relationships
             rels_query = """
             MATCH (n)-[r]->(m)
-            RETURN n.uuid as source, m.uuid as target, type(r) as type, r as rel
+            RETURN n.uuid as source, m.uuid as target, type(r) as type, properties(r) as props
             """
             rels_result = neo4j.execute_query(rels_query)
 
         # Process nodes
         nodes_data = []
-        for record in nodes_result:
-            node = record.get("n")
-            if node and node.get("uuid"):
-                # Determine node type/label
-                label = "Unknown"
-                if "name" in node:
-                    if "dob" in node:
-                        label = "Patient"
-                    elif "specialty" in node:
-                        label = "Clinician"
-                    elif "date" in node:
-                        label = "Encounter"
-                    elif "code" in node:
-                        if "system" in node:
-                            label = "Disease" if node.get("system") == "ICD10" else "Medication"
-                        else:
-                            label = "Symptom"
-                    elif "loinc" in node:
-                        label = "Test"
-                    elif "value" in node and "unit" in node:
-                        label = "TestResult"
+        processed_uuids = set()
 
-                node_data = {
-                    "id": node["uuid"],
-                    "label": label,
-                    "properties": {k: v for k, v in node.items() if k != "uuid"},
-                    "display_name": node.get("name") or node.get("title") or node["uuid"][:8]
-                }
-                nodes_data.append(node_data)
+        for record in nodes_result:
+            if not isinstance(record, dict):
+                continue
+
+            node = record.get("n")
+            if not isinstance(node, dict):
+                continue
+
+            node_uuid = node.get("uuid")
+            if not node_uuid or node_uuid in processed_uuids:
+                continue
+
+            processed_uuids.add(node_uuid)
+
+            # Determine node type/label
+            label = _determine_node_label(node)
+
+            node_data = {
+                "id": node_uuid,
+                "label": label,
+                "properties": {k: v for k, v in node.items() if k != "uuid"},
+                "display_name": node.get("name") or node.get("title") or node_uuid[:8]
+            }
+            nodes_data.append(node_data)
 
         # Process relationships
         edges_data = []
         for record in rels_result:
-            if record.get("source") and record.get("target"):
-                rel = record.get("rel", {})
+            if not isinstance(record, dict):
+                continue
+
+            source = record.get("source")
+            target = record.get("target")
+            rel_type = record.get("type")
+
+            if source and target and rel_type:
+                props = record.get("props", {})
+                if not isinstance(props, dict):
+                    props = {}
+
                 edge_data = {
-                    "id": f"{record['source']}-{record['type']}-{record['target']}",
-                    "source": record["source"],
-                    "target": record["target"],
-                    "type": record["type"],
-                    "properties": {k: v for k, v in rel.items() if k not in ["uuid", "source", "target"]}
+                    "id": f"{source}-{rel_type}-{target}",
+                    "source": source,
+                    "target": target,
+                    "type": rel_type,
+                    "properties": props
                 }
                 edges_data.append(edge_data)
 
@@ -139,7 +155,7 @@ def get_node_subgraph(
 
         result = neo4j.execute_query(nodes_query, {"uuid": node_uuid})
 
-        if not result:
+        if not result or not result[0].get("center"):
             raise HTTPException(status_code=404, detail=f"Node {node_uuid} not found")
 
         # Extract center and connected nodes
@@ -147,54 +163,57 @@ def get_node_subgraph(
         connected_nodes = result[0].get("connected", [])
 
         all_nodes = [center_node] + [n for n in connected_nodes if n]
-        node_uuids = [n["uuid"] for n in all_nodes if n and n.get("uuid")]
+        node_uuids = [n["uuid"] for n in all_nodes if isinstance(n, dict) and n.get("uuid")]
 
         # Get relationships between these nodes
-        rels_query = """
-        MATCH (n)-[r]->(m)
-        WHERE n.uuid IN $uuids AND m.uuid IN $uuids
-        RETURN n.uuid as source, m.uuid as target, type(r) as type, r as rel
-        """
-
-        rels_result = neo4j.execute_query(rels_query, {"uuids": node_uuids})
+        if node_uuids:
+            rels_query = """
+            MATCH (n)-[r]->(m)
+            WHERE n.uuid IN $uuids AND m.uuid IN $uuids
+            RETURN n.uuid as source, m.uuid as target, type(r) as type, properties(r) as props
+            """
+            rels_result = neo4j.execute_query(rels_query, {"uuids": node_uuids})
+        else:
+            rels_result = []
 
         # Process nodes
         nodes_data = []
         for node in all_nodes:
-            if node and node.get("uuid"):
-                # Determine node type
-                label = "Unknown"
-                if "dob" in node:
-                    label = "Patient"
-                elif "specialty" in node:
-                    label = "Clinician"
-                elif "date" in node and "dept" in node:
-                    label = "Encounter"
-                elif "code" in node:
-                    label = "Disease" if node.get("system") == "ICD10" else "Medication"
-                elif "loinc" in node:
-                    label = "Test"
+            if not isinstance(node, dict) or not node.get("uuid"):
+                continue
 
-                node_data = {
-                    "id": node["uuid"],
-                    "label": label,
-                    "properties": {k: v for k, v in node.items() if k != "uuid"},
-                    "display_name": node.get("name") or node.get("title") or node["uuid"][:8],
-                    "is_center": node["uuid"] == node_uuid
-                }
-                nodes_data.append(node_data)
+            label = _determine_node_label(node)
+
+            node_data = {
+                "id": node["uuid"],
+                "label": label,
+                "properties": {k: v for k, v in node.items() if k != "uuid"},
+                "display_name": node.get("name") or node.get("title") or node["uuid"][:8],
+                "is_center": node["uuid"] == node_uuid
+            }
+            nodes_data.append(node_data)
 
         # Process relationships
         edges_data = []
         for record in rels_result:
-            if record.get("source") and record.get("target"):
-                rel = record.get("rel", {})
+            if not isinstance(record, dict):
+                continue
+
+            source = record.get("source")
+            target = record.get("target")
+            rel_type = record.get("type")
+
+            if source and target and rel_type:
+                props = record.get("props", {})
+                if not isinstance(props, dict):
+                    props = {}
+
                 edge_data = {
-                    "id": f"{record['source']}-{record['type']}-{record['target']}",
-                    "source": record["source"],
-                    "target": record["target"],
-                    "type": record["type"],
-                    "properties": {k: v for k, v in rel.items() if k not in ["uuid", "source", "target"]}
+                    "id": f"{source}-{rel_type}-{target}",
+                    "source": source,
+                    "target": target,
+                    "type": rel_type,
+                    "properties": props
                 }
                 edges_data.append(edge_data)
 
@@ -242,7 +261,7 @@ def get_graph_statistics(neo4j: Neo4jConnection = Depends(get_neo4j)):
         total_query = """
         MATCH (n)
         WITH count(n) as node_count
-        MATCH ()-[r]->()
+        OPTIONAL MATCH ()-[r]->()
         RETURN node_count, count(r) as relationship_count
         """
 
@@ -250,19 +269,30 @@ def get_graph_statistics(neo4j: Neo4jConnection = Depends(get_neo4j)):
         rel_stats = neo4j.execute_query(rel_stats_query)
         totals = neo4j.execute_query(total_query)
 
+        # Build response
+        nodes_by_type = {}
+        for stat in node_stats:
+            if isinstance(stat, dict) and "label" in stat and "count" in stat:
+                nodes_by_type[stat["label"]] = stat["count"]
+
+        relationships_by_type = {}
+        for stat in rel_stats:
+            if isinstance(stat, dict) and "type" in stat and "count" in stat:
+                relationships_by_type[stat["type"]] = stat["count"]
+
+        total_nodes = 0
+        total_relationships = 0
+        if totals and isinstance(totals[0], dict):
+            total_nodes = totals[0].get("node_count", 0)
+            total_relationships = totals[0].get("relationship_count", 0)
+
         return {
             "totals": {
-                "nodes": totals[0]["node_count"] if totals else 0,
-                "relationships": totals[0]["relationship_count"] if totals else 0
+                "nodes": total_nodes,
+                "relationships": total_relationships
             },
-            "nodes_by_type": {
-                stat["label"]: stat["count"]
-                for stat in node_stats
-            },
-            "relationships_by_type": {
-                stat["type"]: stat["count"]
-                for stat in rel_stats
-            }
+            "nodes_by_type": nodes_by_type,
+            "relationships_by_type": relationships_by_type
         }
 
     except Exception as e:
@@ -270,3 +300,31 @@ def get_graph_statistics(neo4j: Neo4jConnection = Depends(get_neo4j)):
             status_code=500,
             detail=f"Failed to get statistics: {str(e)}"
         )
+
+
+def _determine_node_label(node: dict) -> str:
+    """Determine node label from its properties"""
+    if "dob" in node:
+        return "Patient"
+    elif "specialty" in node:
+        return "Clinician"
+    elif "date" in node and "dept" in node:
+        return "Encounter"
+    elif "value" in node and "unit" in node:
+        return "TestResult"
+    elif "loinc" in node:
+        return "Test"
+    elif "code" in node:
+        system = node.get("system", "")
+        if "ICD" in system:
+            return "Disease"
+        elif "RxNorm" in system:
+            return "Medication"
+        elif "CPT" in system or "HCPCS" in system:
+            return "Procedure"
+        else:
+            return "Symptom"
+    elif "title" in node:
+        return "Guideline"
+    else:
+        return "Unknown"
