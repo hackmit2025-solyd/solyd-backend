@@ -1,40 +1,91 @@
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.orm import Session
 
 from app.db.neo4j import Neo4jConnection
+from app.db.database import get_db
+from app.db.models import Document, Chunk
 from app.models.schemas import DocumentUpload
 from app.services.extraction import extraction_service
 from app.services.resolution import ResolutionService
+from app.services.chunking import chunking_service
+from app.services.embedding import embedding_service
 
 router = APIRouter()
 
 
-def get_services(request: Request) -> Dict:
+def get_services(request: Request, db: Session = Depends(get_db)) -> Dict:
     """Get all required services"""
     neo4j_conn = request.app.state.neo4j
     return {
         "extraction": extraction_service,
         "resolution": ResolutionService(neo4j_conn),
+        "chunking": chunking_service,
+        "embedding": embedding_service,
         "neo4j": neo4j_conn,
+        "db": db,
     }
 
 
 @router.post("/document")
 def upload_document(document: DocumentUpload, services: Dict = Depends(get_services)):
-    """Upload and process a document"""
-    extraction_service = services["extraction"]
+    """Upload and process a document with chunking and embedding"""
+    db = services["db"]
+    chunking = services["chunking"]
+    embedding = services["embedding"]
+    extraction = services["extraction"]
     resolution_service = services["resolution"]
     neo4j = services["neo4j"]
 
     try:
-        # Step 1: Extract entities from document text
-        extracted = extraction_service.extract_entities(document.text)
+        # Step 1: Save document to PostgreSQL
+        doc_record = Document(text=document.text)
+        db.add(doc_record)
+        db.flush()  # Get the UUID without committing
 
-        # Step 2: Normalize entities
-        normalized = extraction_service.normalize_entities(extracted["entities"])
+        # Step 2: Chunk the text
+        chunks = chunking.chunk_text(document.text)
 
-        # Step 3: Resolve entities
+        # Step 3: Generate embeddings for chunks
+        chunk_texts = [chunk["text"] for chunk in chunks]
+        embeddings = embedding.generate_embeddings(chunk_texts)
+
+        # Step 4: Save chunks with embeddings to PostgreSQL
+        chunk_records = []
+        for i, chunk in enumerate(chunks):
+            chunk_record = Chunk(
+                document_id=doc_record.uuid,
+                chunk_index=chunk["chunk_index"],
+                text=chunk["text"],
+                embedding=embeddings[i] if embeddings[i] else None
+            )
+            db.add(chunk_record)
+            chunk_records.append(chunk_record)
+
+        # Commit document and chunks to database
+        db.commit()
+
+        # Step 5: Extract entities from each chunk and merge
+        all_entities = {}
+        all_assertions = []
+
+        for chunk_record in chunk_records:
+            extracted = extraction.extract_entities(chunk_record.text)
+
+            # Merge entities
+            for entity_type, entities in extracted.get("entities", {}).items():
+                if entity_type not in all_entities:
+                    all_entities[entity_type] = []
+                all_entities[entity_type].extend(entities)
+
+            # Merge assertions
+            all_assertions.extend(extracted.get("assertions", []))
+
+        # Step 6: Normalize entities
+        normalized = extraction.normalize_entities(all_entities)
+
+        # Step 7: Resolve entities
         resolved_entities = []
         for entity_type, entities in normalized.items():
             for entity in entities:
@@ -42,23 +93,26 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
                 resolution["entity_type"] = entity_type
                 resolved_entities.append(resolution)
 
-        # Step 4: Create upsert plan
+        # Step 8: Create upsert plan
         upsert_plan = resolution_service.create_upsert_plan(
-            resolved_entities, extracted.get("assertions", [])
+            resolved_entities, all_assertions
         )
 
-        # Step 5: Execute upserts to Neo4j
+        # Step 9: Execute upserts to Neo4j
         upsert_results = _execute_upsert_plan(neo4j, upsert_plan)
 
         return {
+            "document_id": str(doc_record.uuid),
+            "chunks_created": len(chunk_records),
             "entities_extracted": sum(
                 len(entities) for entities in normalized.values()
             ),
-            "assertions_created": len(extracted.get("assertions", [])),
+            "assertions_created": len(all_assertions),
             "upsert_results": upsert_results,
         }
 
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=f"Document processing failed: {e}")
 
 

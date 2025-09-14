@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.db.neo4j import Neo4jConnection
+from app.db.database import init_db
 from app.api import ingest
 
 # --- Loguru Configuration ---
@@ -22,6 +23,13 @@ logger.add(
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Medical Knowledge Graph Backend...")
+
+    # Initialize PostgreSQL database
+    try:
+        init_db()
+        logger.info("PostgreSQL database initialized")
+    except Exception as e:
+        logger.error(f"PostgreSQL initialization failed: {e}")
 
     # Initialize Neo4j connection
     neo4j_conn = Neo4jConnection()

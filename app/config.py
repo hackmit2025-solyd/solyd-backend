@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -12,12 +11,21 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"
     neo4j_password: str = "test"
 
-    # PostgreSQL (keeping minimal for potential future use)
-    postgres_url: Optional[str] = None
+    # PostgreSQL
+    postgres_url: str = "postgresql://postgres:postgres@localhost:5432/medical_kg"
 
     # Claude API
     anthropic_api_key: str = ""
     claude_model: str = "claude-sonnet-4-20250514"
+
+    # Chunking settings
+    chunk_size: int = 1000  # characters per chunk
+    chunk_overlap: int = 200  # overlap between chunks
+
+    # Embedding settings (VoyageAI)
+    voyage_api_key: str = ""
+    voyage_model: str = "voyage-3.5"
+    embedding_dimension: int = 1024  # voyage-3.5 dimension
 
     class Config:
         env_file = ".env"
