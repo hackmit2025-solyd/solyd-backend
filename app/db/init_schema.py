@@ -80,6 +80,44 @@ def create_uuid_constraints(neo4j: Neo4jConnection):
                 print(f"  ✗ Failed to create UUID constraint for {label}: {e}")
 
 
+def create_fulltext_indexes(neo4j: Neo4jConnection):
+    """Create full-text indexes for fuzzy search"""
+    print("\nCreating full-text search indexes...")
+
+    fulltext_indexes = [
+        ("patient_search", "Patient", ["name"]),
+        ("clinician_search", "Clinician", ["name", "specialty"]),
+        ("disease_search", "Disease", ["name", "code"]),
+        ("symptom_search", "Symptom", ["name", "code"]),
+        ("medication_search", "Medication", ["name", "code"]),
+        ("procedure_search", "Procedure", ["name", "code"]),
+        ("test_search", "Test", ["name", "loinc"]),
+    ]
+
+    for index_name, label, properties in fulltext_indexes:
+        try:
+            # Drop existing index if it exists
+            try:
+                neo4j.execute_query(f"DROP INDEX {index_name}")
+            except:
+                pass  # Index doesn't exist, which is fine
+
+            # Create full-text index
+            props_str = ", ".join([f"n.{prop}" for prop in properties])
+            query = f"""
+            CREATE FULLTEXT INDEX {index_name}
+            FOR (n:{label})
+            ON EACH [{props_str}]
+            """
+            neo4j.execute_query(query)
+            print(f"  ✓ Created full-text index: {index_name}")
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                print(f"  ○ Full-text index already exists: {index_name}")
+            else:
+                print(f"  ✗ Failed to create full-text index {index_name}: {e}")
+
+
 def create_catalog_indexes(neo4j: Neo4jConnection):
     """Create indexes for catalog node lookups"""
     print("\nCreating catalog node indexes...")
@@ -245,6 +283,9 @@ def init_neo4j_schema():
 
         # Create catalog lookup indexes
         create_catalog_indexes(neo4j)
+
+        # Create full-text search indexes
+        create_fulltext_indexes(neo4j)
 
         # Verify the schema
         stats = verify_schema(neo4j)
