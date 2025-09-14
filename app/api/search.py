@@ -2,7 +2,7 @@
 
 from typing import Dict
 import time
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from app.models.search_schemas import (
     SearchRequest,
     SearchResponse,
@@ -169,7 +169,9 @@ def test_fulltext_search(
 
 @router.post("/query-graph", response_model=GraphSearchResponse)
 def natural_language_query_graph(
-    search_request: SearchRequest, services: Dict = Depends(get_services)
+    search_request: SearchRequest,
+    services: Dict = Depends(get_services),
+    hipaa: bool = Query(False, description="Enable HIPAA compliance mode to mask patient PII")
 ):
     """
     Execute natural language query and return results in graph format
@@ -260,11 +262,28 @@ def natural_language_query_graph(
                             value["__labels__"] = record[labels_key]
 
                         label = _determine_node_label(value)
+
+                        # Apply HIPAA masking for Patient nodes
+                        properties = {k: v for k, v in value.items() if k not in ["uuid", "__labels__"]}
+                        display_name = value.get("name") or value.get("title") or node_uuid[:8]
+
+                        if hipaa and label == "Patient":
+                            # Mask patient name
+                            if "name" in properties:
+                                properties["name"] = "MASKED"
+                            display_name = "MASKED"
+
+                            # Mask DOB to show only year
+                            if "dob" in properties and isinstance(properties["dob"], str):
+                                # Keep only the year part (YYYY-**-**)
+                                year = properties["dob"][:4] if len(properties["dob"]) >= 4 else "****"
+                                properties["dob"] = f"{year}-**-**"
+
                         nodes_dict[node_uuid] = {
                             "id": node_uuid,
                             "label": label,
-                            "properties": {k: v for k, v in value.items() if k not in ["uuid", "__labels__"]},
-                            "display_name": value.get("name") or value.get("title") or node_uuid[:8]
+                            "properties": properties,
+                            "display_name": display_name
                         }
 
         # Get relationships between result nodes
