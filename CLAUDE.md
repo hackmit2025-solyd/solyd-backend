@@ -42,6 +42,32 @@ uv run pytest tests/test_extraction.py
 
 # Run with coverage
 uv run pytest --cov=app --cov-report=html
+
+# Run tests with verbose output
+uv run pytest -v
+
+# Run specific test function
+uv run pytest tests/test_extraction.py::test_entity_extraction
+```
+
+### Database Management
+```bash
+# Start databases only
+docker-compose up -d neo4j postgres
+
+# View Neo4j browser
+# Navigate to: http://localhost:7474
+# Default credentials: neo4j/P@ssw0rd
+
+# Connect to PostgreSQL
+docker exec -it postgres psql -U postgres -d postgres
+
+# Clear Neo4j database (CAUTION)
+docker exec neo4j cypher-shell -u neo4j -p P@ssw0rd "MATCH (n) DETACH DELETE n"
+
+# View Docker logs
+docker-compose logs -f neo4j
+docker-compose logs -f postgres
 ```
 
 ## Architecture Overview
@@ -53,55 +79,69 @@ The system implements a **Medical Knowledge Graph** with the following key archi
 1. **Dual Database Pattern**:
    - Neo4j for graph relationships and entity connections
    - PostgreSQL with pgvector for document storage and semantic search
-   - Redis for session management and conflict caching
+   - Redis for session management and conflict caching (optional)
 
 2. **Entity Extraction Pipeline**:
    ```
    Document → Chunking → LLM Extraction → Validation → Normalization → ID Generation → Graph Writing
    ```
-   - Documents are chunked (app/services/chunking.py)
-   - Entities extracted via Claude (app/services/extraction.py)
-   - JSON validated with auto-repair (app/services/validation.py)
-   - Medical data normalized (app/services/normalization.py)
-   - Consistent IDs generated (app/services/id_generator.py)
-   - Batch written to Neo4j (app/services/graph_writer.py)
+   - Documents are chunked with overlap (app/services/chunking.py) - 1000 chars, 200 overlap
+   - Entities extracted via Claude Sonnet (app/services/extraction.py)
+   - Cross-chunk entity deduplication in _merge_chunk_extractions()
+   - UUID-based node identification for consistency
+   - Batch written to Neo4j with document_id tracking
 
-3. **Ontology Mapping Strategy**:
-   - Primary: BioPortal API for comprehensive medical codes (app/services/bioportal.py)
-   - Fallback: Local SQLite cache with Claude-based selection (app/services/ontology.py)
-   - Systems: ICD-10, SNOMED CT, LOINC, RxNorm
+3. **Natural Language Search System**:
+   - Full-text indexes on Neo4j using Lucene
+   - Fuzzy matching with Levenshtein distance
+   - Entity extraction from queries → UUID mapping → Cypher generation
+   - Two endpoints: `/api/search/query` (JSON) and `/api/search/query-graph` (nodes/edges)
 
-4. **Conflict Resolution System**:
-   - Automatic resolution for timestamp-based conflicts
-   - Human-in-the-loop for contradictory medical data
-   - Bi-temporal model (valid_from/valid_to) for versioning
+4. **Graph Export & Visualization**:
+   - `/api/graph/full` - Complete graph export with optional limit
+   - `/api/graph/subgraph/{uuid}` - Node-centered subgraph with depth control
+   - `/api/graph/statistics` - Graph metrics and counts
+   - Node labeling via _determine_node_label() heuristics
 
-### Security Considerations
+### API Endpoint Structure
 
-- **Cypher Injection Prevention**: All dynamic queries use whitelisted labels/properties (app/services/graph_writer.py)
-- **Batch Processing**: Uses Neo4j UNWIND for safe bulk operations
-- **S3 Integration**: Documents processed then deleted from temp storage
-
-### External Service Dependencies
-
-- **AWS Textract**: OCR for medical documents (requires AWS credentials)
-- **BioPortal API**: Medical ontology mapping (requires API key)
-- **Apache Tika**: PDF/Word document extraction (Java-based service)
-- **Claude/Anthropic API**: Entity extraction and query generation
+```
+/api/
+├── ingest/
+│   ├── document    # Text document ingestion
+│   └── pdf         # PDF file upload and processing
+├── search/
+│   ├── to-cypher   # Natural language → Cypher
+│   ├── query       # Execute search (JSON results)
+│   ├── query-graph # Execute search (graph format)
+│   └── validate-cypher
+└── graph/
+    ├── full        # Export entire graph
+    ├── subgraph/{uuid}
+    └── statistics
+```
 
 ### Critical Data Flow Patterns
 
-1. **Document Ingestion**:
-   - Upload → S3 Storage → OCR/Text Extraction → Chunking → Entity Extraction → Graph Storage
+1. **Document Ingestion with Chunking**:
+   - Upload → Text extraction (PDF via PyPDF2)
+   - Chunking with context passing between chunks
+   - Parallel entity extraction per chunk
+   - Cross-chunk entity deduplication
+   - UUID generation and graph storage
 
 2. **Query Processing**:
-   - Natural Language → Claude → Cypher Query → Neo4j → Result Formatting
+   - Natural language → Entity extraction
+   - Full-text search for entity → UUID mapping
+   - Cypher generation with UUID injection
+   - Query validation via EXPLAIN
+   - Result formatting (JSON or graph)
 
-3. **Conflict Detection**:
-   - New assertions compared against existing graph → Conflicts stored in Redis → API for resolution
-
-4. **Progressive Graph Rendering**:
-   - Initial node → Expandable detection → On-demand expansion → Clustering/Filtering
+3. **Graph Query Transformation** (query-graph endpoint):
+   - Cypher RETURN clause modification to return full nodes
+   - Extraction of all MATCH pattern variables
+   - Automatic inclusion of missing nodes in RETURN
+   - Relationship querying between result nodes
 
 ### Environment Variables Required
 
@@ -109,34 +149,74 @@ The system implements a **Medical Knowledge Graph** with the following key archi
 # Core databases
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
-NEO4J_PASSWORD=test
-POSTGRES_URL=postgresql://user:pass@localhost:5432/db
+NEO4J_PASSWORD=P@ssw0rd  # Docker default
+POSTGRES_URL=postgresql://postgres:P@ssw0rd@localhost:5432/postgres
 
 # APIs
 ANTHROPIC_API_KEY=sk-xxx
-BIOPORTAL_API_KEY=xxx
-VOYAGE_API_KEY=xxx  # For embeddings
+VOYAGE_API_KEY=xxx  # For embeddings (voyage-3.5, 1024 dimensions)
 
-# AWS (for OCR and S3)
-AWS_ACCESS_KEY_ID=xxx
+# Optional services
+BIOPORTAL_API_KEY=xxx  # Medical ontology mapping
+AWS_ACCESS_KEY_ID=xxx  # For Textract OCR
 AWS_SECRET_ACCESS_KEY=xxx
 AWS_REGION=us-east-1
 S3_BUCKET_NAME=medical-docs
-
-# Redis (optional, falls back to memory)
-REDIS_URL=redis://localhost:6379
+REDIS_URL=redis://localhost:6379  # Optional, falls back to memory
 ```
 
 ### Key Service Patterns
 
-- **Singleton Services**: Most services use singleton pattern (e.g., `ontology_mapper`, `id_generator`)
-- **Dependency Injection**: FastAPI dependencies for Neo4j/PostgreSQL connections
-- **Async Operations**: All database operations are async-ready
-- **Batch Processing**: Graph writes optimized with UNWIND for 100+ entities
+- **Service Initialization**: Services created in endpoint dependencies via `get_services()`
+- **Neo4j Connection**: Singleton in app.state.neo4j, accessed via `get_neo4j(request)`
+- **Entity Matching**: EntityMatcher uses full-text indexes for fuzzy search
+- **Cypher Generation**: CypherGenerator with retry logic and error fixing
+- **ID Generation**: UUID-based with deterministic generation for duplicates
+- **Batch Processing**: Uses UNWIND for efficient Neo4j writes
 
-### Testing Strategy
+### Database Schema Considerations
 
-- Unit tests for individual services (normalization, validation, ID generation)
-- Integration tests for end-to-end pipelines
-- Mock external services (Textract, BioPortal, Claude) in tests
-- Use test fixtures for Neo4j/PostgreSQL data
+**Neo4j Indexes** (created in init_schema.py):
+- Full-text indexes for fuzzy search on each entity type
+- Unique constraints on uuid properties
+- Composite indexes for frequently queried patterns
+
+**PostgreSQL Tables**:
+- `documents`: Stores original text with UUID primary key
+- `chunks`: Document chunks with embeddings (pgvector)
+- Vector similarity search for semantic queries
+
+### Model Configuration
+
+- **Claude Model**: claude-3-5-sonnet-20241022 (settings.claude_model)
+- **Embedding Model**: voyage-3.5 with 1024 dimensions
+- **Extraction Temperature**: 0.3 for consistency
+- **Token Limits**: 8192 max tokens for extraction
+
+### Common Development Tasks
+
+```bash
+# Restart everything fresh
+docker-compose down -v  # Remove volumes
+./run.sh
+
+# Debug entity extraction
+uv run python -c "from app.services.extraction import ExtractionService; print(ExtractionService().extract_entities('Patient John Doe, 45 years old'))"
+
+# Test natural language search
+curl -X POST http://localhost:8000/api/search/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "patients with diabetes"}'
+
+# View Neo4j graph
+# Open http://localhost:7474
+# Run: MATCH (n) RETURN n LIMIT 50
+```
+
+### Error Handling Patterns
+
+- Services return empty results on failure (not exceptions)
+- API endpoints use HTTPException for client errors
+- Validation errors auto-repair via JSON schema
+- Cypher errors retry with Claude-based fixing
+- Full-text search falls back from fuzzy to partial matching

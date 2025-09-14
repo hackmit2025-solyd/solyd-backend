@@ -194,35 +194,46 @@ def natural_language_query_graph(
         entity_mappings = entity_matcher.find_best_matches(extracted_entities)
 
         # Generate Cypher
-        cypher, _ = cypher_generator.natural_to_cypher(
+        original_cypher, _ = cypher_generator.natural_to_cypher(
             search_request.query, entity_mappings
         )
 
-        # Modify the Cypher to return full nodes instead of individual properties
-        # Replace RETURN clause to return full nodes
+        # Extract MATCH and WHERE clauses from original query
         import re
 
-        # Find the RETURN clause and extract the node variables
-        return_match = re.search(r'RETURN\s+(.+?)(?:\s+LIMIT|$)', cypher, re.IGNORECASE | re.DOTALL)
-        if return_match:
-            return_clause = return_match.group(1)
-            # Extract unique node variables (e.g., p, e, m from p.uuid, p.name, e.uuid, etc.)
-            node_vars = set()
-            for part in return_clause.split(','):
-                if '.' in part:
-                    var_name = part.strip().split('.')[0]
-                    node_vars.add(var_name)
+        # Extract everything before RETURN
+        match_pattern = re.search(
+            r'^(.*?)(?:RETURN|$)',
+            original_cypher,
+            re.IGNORECASE | re.DOTALL
+        )
 
-            # Rebuild RETURN clause with full nodes
-            if node_vars:
-                new_return = "RETURN " + ", ".join(sorted(node_vars))
-                cypher = re.sub(r'RETURN\s+.+?(?=\s+LIMIT|$)', new_return, cypher, flags=re.IGNORECASE | re.DOTALL)
+        if match_pattern:
+            query_base = match_pattern.group(1).strip()
+        else:
+            query_base = original_cypher
 
-        # Execute query with limit
-        if search_request.limit and "LIMIT" not in cypher.upper():
-            cypher += f" LIMIT {search_request.limit}"
+        # Extract all node variables from MATCH patterns
+        node_vars = set()
+        # Find all patterns like (var) or (var:Label)
+        node_patterns = re.findall(r'\((\w+)(?::\w+)?\)', query_base)
+        node_vars.update(node_patterns)
 
-        results = neo4j.execute_query(cypher)
+        # Build new Cypher for nodes
+        if node_vars:
+            # Create RETURN clause with all matched nodes
+            return_clause = "RETURN " + ", ".join(sorted(node_vars))
+            nodes_cypher = f"{query_base}\n{return_clause}"
+        else:
+            # Fallback to original if no nodes found
+            nodes_cypher = original_cypher
+
+        # Apply limit
+        if search_request.limit and "LIMIT" not in nodes_cypher.upper():
+            nodes_cypher += f" LIMIT {search_request.limit}"
+
+        # Execute query for nodes
+        results = neo4j.execute_query(nodes_cypher)
 
         # Process results into graph format
         nodes_dict = {}  # Use dict to avoid duplicates
@@ -232,7 +243,7 @@ def natural_language_query_graph(
             if not isinstance(record, dict):
                 continue
 
-            # Extract nodes from each record
+            # Extract all nodes from the record
             for key, value in record.items():
                 if isinstance(value, dict) and "uuid" in value:
                     # This is a node
@@ -249,6 +260,8 @@ def natural_language_query_graph(
         # Get relationships between result nodes
         if nodes_dict:
             node_uuids = list(nodes_dict.keys())
+
+            # Query for all relationships between these nodes
             rels_query = """
             MATCH (n)-[r]->(m)
             WHERE n.uuid IN $uuids AND m.uuid IN $uuids
@@ -282,7 +295,7 @@ def natural_language_query_graph(
         return GraphSearchResponse(
             nodes=list(nodes_dict.values()),
             edges=edges_list,
-            cypher_used=cypher,
+            cypher_used=nodes_cypher,  # Return the actually executed query
             entity_mappings=entity_mappings,
             metadata={
                 "node_count": len(nodes_dict),
