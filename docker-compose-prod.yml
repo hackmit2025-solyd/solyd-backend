@@ -28,7 +28,7 @@ services:
     volumes:
       - neo4j_data:/data
       # 위에서 만든 인증서 디렉터리를 Bolt 경로로 마운트
-      - /opt/neo4j-certs/bolt:/var/lib/neo4j/certificates/bolt:ro
+      - /opt/neo4j-certs/bolt:/var/lib/neo4j/certificates/bolt
 
   postgres:
     image: pgvector/pgvector:pg17
