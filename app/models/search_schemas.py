@@ -41,6 +41,21 @@ class SearchResponse(BaseModel):
     result_count: int = Field(..., description="Number of results returned")
 
 
+class GraphSearchResponse(BaseModel):
+    """Natural language search response in graph format"""
+    nodes: List[Dict[str, Any]] = Field(..., description="Graph nodes")
+    edges: List[Dict[str, Any]] = Field(..., description="Graph edges")
+    cypher_used: str = Field(..., description="Cypher query that was executed")
+    entity_mappings: Dict[str, EntityMatch] = Field(
+        default_factory=dict,
+        description="Entity mappings used in query"
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Metadata about the query and results"
+    )
+
+
 class ErrorResponse(BaseModel):
     """Error response for search failures"""
     error: str = Field(..., description="Error message")

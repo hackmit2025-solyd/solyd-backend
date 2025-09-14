@@ -1,6 +1,6 @@
 """Graph data export API"""
 
-from typing import Dict, List, Any, Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from app.db.neo4j import Neo4jConnection
 

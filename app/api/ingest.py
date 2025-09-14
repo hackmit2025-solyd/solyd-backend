@@ -256,7 +256,6 @@ def _merge_chunk_extractions(chunk_extractions: List[Dict]) -> Dict:
     """Merge and deduplicate entities from multiple chunk extractions"""
     merged_entities = {}
     merged_assertions = []
-    entity_mapping = {}  # Track original to merged index mapping
 
     for chunk_idx, extraction in enumerate(chunk_extractions):
         chunk_mapping = {}  # Map from chunk's entity reference to global reference

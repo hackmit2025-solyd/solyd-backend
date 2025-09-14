@@ -99,7 +99,7 @@ def create_fulltext_indexes(neo4j: Neo4jConnection):
             # Drop existing index if it exists
             try:
                 neo4j.execute_query(f"DROP INDEX {index_name}")
-            except:
+            except Exception:
                 pass  # Index doesn't exist, which is fine
 
             # Create full-text index
