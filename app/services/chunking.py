@@ -1,4 +1,5 @@
 """Text chunking service"""
+
 from typing import List, Dict
 from app.config import settings
 
@@ -42,10 +43,7 @@ class ChunkingService:
             chunk_text = text[start:end]
 
             # Add to chunks list
-            chunks.append({
-                "chunk_index": chunk_index,
-                "text": chunk_text
-            })
+            chunks.append({"chunk_index": chunk_index, "text": chunk_text})
 
             # Move to next chunk with overlap
             # For the last chunk, we don't need overlap

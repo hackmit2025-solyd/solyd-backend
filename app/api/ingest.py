@@ -58,7 +58,7 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
                 document_id=doc_record.uuid,
                 chunk_index=chunk["chunk_index"],
                 text=chunk["text"],
-                embedding=embeddings[i] if embeddings[i] else None
+                embedding=embeddings[i] if embeddings[i] else None,
             )
             db.add(chunk_record)
             chunk_records.append(chunk_record)

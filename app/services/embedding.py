@@ -1,4 +1,5 @@
 """Embedding service using VoyageAI"""
+
 from typing import List
 import voyageai
 from app.config import settings
@@ -23,9 +24,7 @@ class EmbeddingService:
         """
         try:
             result = self.client.embed(
-                texts=[text],
-                model=self.model,
-                input_type="document"
+                texts=[text], model=self.model, input_type="document"
             )
             return result.embeddings[0]
         except Exception as e:
@@ -44,9 +43,7 @@ class EmbeddingService:
         """
         try:
             result = self.client.embed(
-                texts=texts,
-                model=self.model,
-                input_type="document"
+                texts=texts, model=self.model, input_type="document"
             )
             return result.embeddings
         except Exception as e:

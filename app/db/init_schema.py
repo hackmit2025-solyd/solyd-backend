@@ -1,8 +1,10 @@
 """
-Initialize Neo4j schema with UUID-based constraints and indexes
+Initialize database schemas for both Neo4j and PostgreSQL
 """
 
 from app.db.neo4j import Neo4jConnection
+from app.db.database import engine, Base
+from sqlalchemy import text
 
 
 def drop_all_constraints_and_indexes(neo4j: Neo4jConnection):
@@ -176,15 +178,65 @@ def verify_schema(neo4j: Neo4jConnection):
         return {}
 
 
-def init_schema():
-    """Initialize the complete Neo4j schema"""
+def init_postgres_schema():
+    """Initialize PostgreSQL schema with pgvector"""
+    print("\n" + "=" * 60)
+    print("POSTGRESQL SCHEMA INITIALIZATION")
+    print("=" * 60)
+
+    try:
+        # Import models to register them
+        from app.db import models  # noqa: F401
+
+        # Create pgvector extension
+        print("\nCreating pgvector extension...")
+        with engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            conn.commit()
+        print("  ✓ pgvector extension created")
+
+        # Create tables
+        print("\nCreating PostgreSQL tables...")
+        Base.metadata.create_all(bind=engine)
+        print("  ✓ documents table created")
+        print("  ✓ chunks table created (with vector embeddings)")
+
+        # Verify tables
+        with engine.connect() as conn:
+            result = conn.execute(
+                text("""
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                AND table_name IN ('documents', 'chunks')
+                ORDER BY table_name
+            """)
+            )
+            tables = [row[0] for row in result]
+
+            if len(tables) == 2:
+                print("\nPostgreSQL tables verified:")
+                for table in tables:
+                    print(f"  ✓ {table}")
+                return True
+            else:
+                print(f"\n✗ Expected 2 tables, found {len(tables)}")
+                return False
+
+    except Exception as e:
+        print(f"\n✗ PostgreSQL initialization failed: {e}")
+        raise
+
+
+def init_neo4j_schema():
+    """Initialize Neo4j schema"""
+    print("\n" + "=" * 60)
+    print("NEO4J SCHEMA INITIALIZATION")
+    print("=" * 60)
+
     neo4j = Neo4jConnection()
 
     try:
-        print("=" * 60)
-        print("NEO4J SCHEMA INITIALIZATION")
-        print("=" * 60)
-
         # Drop all existing constraints and indexes
         drop_all_constraints_and_indexes(neo4j)
 
@@ -197,19 +249,61 @@ def init_schema():
         # Verify the schema
         stats = verify_schema(neo4j)
 
-        print("\n" + "=" * 60)
-        print("SCHEMA INITIALIZATION COMPLETE!")
-        print(f"UUID Constraints: {stats.get('uuid_constraints', 0)}")
-        print(f"Indexes: {stats.get('indexes', 0)}")
-        print("=" * 60)
+        print("\nNeo4j initialization complete:")
+        print(f"  UUID Constraints: {stats.get('uuid_constraints', 0)}")
+        print(f"  Indexes: {stats.get('indexes', 0)}")
 
         return stats
 
     except Exception as e:
-        print(f"\n✗ Error initializing schema: {e}")
+        print(f"\n✗ Neo4j initialization failed: {e}")
         raise
     finally:
         neo4j.close()
+
+
+def init_schema():
+    """Initialize complete database schema for both PostgreSQL and Neo4j"""
+    print("=" * 60)
+    print("DATABASE SCHEMA INITIALIZATION")
+    print("=" * 60)
+
+    results = {}
+
+    # Initialize PostgreSQL
+    try:
+        postgres_result = init_postgres_schema()
+        results["postgres"] = postgres_result
+    except Exception as e:
+        print(f"PostgreSQL initialization failed: {e}")
+        results["postgres"] = False
+
+    # Initialize Neo4j
+    try:
+        neo4j_result = init_neo4j_schema()
+        results["neo4j"] = neo4j_result
+    except Exception as e:
+        print(f"Neo4j initialization failed: {e}")
+        results["neo4j"] = False
+
+    # Final summary
+    print("\n" + "=" * 60)
+    print("SCHEMA INITIALIZATION SUMMARY")
+    print("=" * 60)
+
+    if results.get("postgres"):
+        print("✓ PostgreSQL: Successfully initialized")
+    else:
+        print("✗ PostgreSQL: Failed to initialize")
+
+    if results.get("neo4j"):
+        print("✓ Neo4j: Successfully initialized")
+    else:
+        print("✗ Neo4j: Failed to initialize")
+
+    print("=" * 60)
+
+    return results
 
 
 if __name__ == "__main__":
