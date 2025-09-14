@@ -85,20 +85,49 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
         # Step 6: Normalize entities
         normalized = extraction.normalize_entities(all_entities)
 
-        # Step 7: Resolve entities
+        # Step 7: Resolve entities and build reference map
         resolved_entities = []
+        reference_map = {}  # Map from "type[index]" to UUID
+
         for entity_type, entities in normalized.items():
-            for entity in entities:
+            for idx, entity in enumerate(entities):
                 resolution = resolution_service.resolve_entity(entity_type, entity)
                 resolution["entity_type"] = entity_type
                 resolved_entities.append(resolution)
 
-        # Step 8: Create upsert plan
+                # Build reference map for assertions
+                ref_key = f"{entity_type}[{idx}]"
+                reference_map[ref_key] = resolution["to_node_id"]
+
+        # Step 8: Update assertions with actual UUIDs
+        resolved_assertions = []
+        for assertion in all_assertions:
+            resolved_assertion = assertion.copy()
+
+            # Replace subject_ref and object_ref with actual UUIDs
+            subject_ref = assertion.get("subject_ref")
+            object_ref = assertion.get("object_ref")
+
+            if subject_ref in reference_map:
+                resolved_assertion["subject_ref"] = reference_map[subject_ref]
+            else:
+                print(f"Warning: Could not resolve subject_ref: {subject_ref}")
+                continue
+
+            if object_ref in reference_map:
+                resolved_assertion["object_ref"] = reference_map[object_ref]
+            else:
+                print(f"Warning: Could not resolve object_ref: {object_ref}")
+                continue
+
+            resolved_assertions.append(resolved_assertion)
+
+        # Step 9: Create upsert plan
         upsert_plan = resolution_service.create_upsert_plan(
-            resolved_entities, all_assertions
+            resolved_entities, resolved_assertions
         )
 
-        # Step 9: Execute upserts to Neo4j
+        # Step 10: Execute upserts to Neo4j
         upsert_results = _execute_upsert_plan(neo4j, upsert_plan)
 
         return {
