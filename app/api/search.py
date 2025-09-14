@@ -126,9 +126,7 @@ def natural_language_query(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Query execution failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Query execution failed: {str(e)}")
 
 
 @router.get("/test-fulltext/{entity_type}/{search_text}")
@@ -171,7 +169,9 @@ def test_fulltext_search(
 def natural_language_query_graph(
     search_request: SearchRequest,
     services: Dict = Depends(get_services),
-    hipaa: bool = Query(False, description="Enable HIPAA compliance mode to mask patient PII")
+    hipaa: bool = Query(
+        False, description="Enable HIPAA compliance mode to mask patient PII"
+    ),
 ):
     """
     Execute natural language query and return results in graph format
@@ -205,9 +205,7 @@ def natural_language_query_graph(
 
         # Extract everything before RETURN
         match_pattern = re.search(
-            r'^(.*?)(?:RETURN|$)',
-            original_cypher,
-            re.IGNORECASE | re.DOTALL
+            r"^(.*?)(?:RETURN|$)", original_cypher, re.IGNORECASE | re.DOTALL
         )
 
         if match_pattern:
@@ -219,7 +217,7 @@ def natural_language_query_graph(
         node_vars = set()
         # Find all patterns like (var), (var:Label), or (var:Label {...})
         # This regex captures the variable name from various node patterns
-        node_patterns = re.findall(r'\((\w+)(?::\w+)?(?:\s*\{[^}]*\})?\)', query_base)
+        node_patterns = re.findall(r"\((\w+)(?::\w+)?(?:\s*\{[^}]*\})?\)", query_base)
         node_vars.update(node_patterns)
 
         # Build new Cypher for nodes with labels
@@ -258,14 +256,22 @@ def natural_language_query_graph(
                     if node_uuid not in nodes_dict:
                         # Check if we have labels for this node
                         labels_key = f"{key}_labels"
-                        if labels_key in record and isinstance(record[labels_key], list):
+                        if labels_key in record and isinstance(
+                            record[labels_key], list
+                        ):
                             value["__labels__"] = record[labels_key]
 
                         label = _determine_node_label(value)
 
                         # Apply HIPAA masking for Patient nodes
-                        properties = {k: v for k, v in value.items() if k not in ["uuid", "__labels__"]}
-                        display_name = value.get("name") or value.get("title") or node_uuid[:8]
+                        properties = {
+                            k: v
+                            for k, v in value.items()
+                            if k not in ["uuid", "__labels__"]
+                        }
+                        display_name = (
+                            value.get("name") or value.get("title") or node_uuid[:8]
+                        )
 
                         if hipaa and label == "Patient":
                             # Mask patient name
@@ -274,16 +280,22 @@ def natural_language_query_graph(
                             display_name = "MASKED"
 
                             # Mask DOB to show only year
-                            if "dob" in properties and isinstance(properties["dob"], str):
+                            if "dob" in properties and isinstance(
+                                properties["dob"], str
+                            ):
                                 # Keep only the year part (YYYY-**-**)
-                                year = properties["dob"][:4] if len(properties["dob"]) >= 4 else "****"
+                                year = (
+                                    properties["dob"][:4]
+                                    if len(properties["dob"]) >= 4
+                                    else "****"
+                                )
                                 properties["dob"] = f"{year}-**-**"
 
                         nodes_dict[node_uuid] = {
                             "id": node_uuid,
                             "label": label,
                             "properties": properties,
-                            "display_name": display_name
+                            "display_name": display_name,
                         }
 
         # Get relationships between result nodes
@@ -314,7 +326,7 @@ def natural_language_query_graph(
                             "source": source,
                             "target": target,
                             "type": rel_type,
-                            "properties": props
+                            "properties": props,
                         }
                         edges_list.append(edge_data)
 
@@ -330,20 +342,16 @@ def natural_language_query_graph(
                 "node_count": len(nodes_dict),
                 "edge_count": len(edges_list),
                 "execution_time_ms": execution_time,
-                "original_query": search_request.query
-            }
+                "original_query": search_request.query,
+            },
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Query execution failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Query execution failed: {str(e)}")
 
 
 @router.post("/validate-cypher")
-def validate_cypher(
-    cypher_query: str, services: Dict = Depends(get_services)
-):
+def validate_cypher(cypher_query: str, services: Dict = Depends(get_services)):
     """
     Validate a Cypher query without executing it
 

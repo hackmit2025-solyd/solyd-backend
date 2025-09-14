@@ -81,7 +81,9 @@ class ExtractionService:
                 context_section += f"- Encounter: {context['encounter']}\n"
             if context.get("clinician"):
                 context_section += f"- Clinician: {context['clinician']}\n"
-            context_section += "\nREFERENCE these entities if they appear in the current text chunk.\n"
+            context_section += (
+                "\nREFERENCE these entities if they appear in the current text chunk.\n"
+            )
 
         base_prompt = f"""Extract medical entities and relationships from the following text.
 {context_section}

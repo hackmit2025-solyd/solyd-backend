@@ -32,21 +32,18 @@ def get_services(request: Request, db: Session = Depends(get_db)) -> Dict:
 
 
 @router.post("/pdf")
-def upload_pdf(
-    file: UploadFile = File(...),
-    services: Dict = Depends(get_services)
-):
+def upload_pdf(file: UploadFile = File(...), services: Dict = Depends(get_services)):
     """Upload and process a PDF file"""
 
     # Validate file type
-    if not file.filename.lower().endswith('.pdf'):
+    if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="File must be a PDF")
 
     # Create temporary file
     temp_file_path = None
     try:
         # Save uploaded file to temporary location
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
             content = file.file.read()  # Read directly from file object
             temp_file.write(content)
             temp_file_path = temp_file.name
@@ -55,7 +52,9 @@ def upload_pdf(
         pdf_text = _extract_text_from_pdf(temp_file_path)
 
         if not pdf_text.strip():
-            raise HTTPException(status_code=400, detail="Could not extract text from PDF")
+            raise HTTPException(
+                status_code=400, detail="Could not extract text from PDF"
+            )
 
         # Process the extracted text using existing document pipeline
         document_upload = DocumentUpload(text=pdf_text)
@@ -83,7 +82,7 @@ def _extract_text_from_pdf(pdf_path: str) -> str:
     text = ""
 
     try:
-        with open(pdf_path, 'rb') as file:
+        with open(pdf_path, "rb") as file:
             pdf_reader = PyPDF2.PdfReader(file)
 
             # Extract text from all pages
@@ -205,7 +204,9 @@ def upload_document(document: DocumentUpload, services: Dict = Depends(get_servi
         )
 
         # Step 11: Execute upserts to Neo4j
-        upsert_results = _execute_upsert_plan(neo4j, upsert_plan, document_id=str(doc_record.uuid))
+        upsert_results = _execute_upsert_plan(
+            neo4j, upsert_plan, document_id=str(doc_record.uuid)
+        )
 
         return {
             "document_id": str(doc_record.uuid),
@@ -286,9 +287,13 @@ def _merge_chunk_extractions(chunk_extractions: List[Dict]) -> Dict:
 
             # Remap subject and object references
             if assertion.get("subject_ref") in chunk_mapping:
-                remapped_assertion["subject_ref"] = chunk_mapping[assertion["subject_ref"]]
+                remapped_assertion["subject_ref"] = chunk_mapping[
+                    assertion["subject_ref"]
+                ]
             if assertion.get("object_ref") in chunk_mapping:
-                remapped_assertion["object_ref"] = chunk_mapping[assertion["object_ref"]]
+                remapped_assertion["object_ref"] = chunk_mapping[
+                    assertion["object_ref"]
+                ]
 
             # Check for duplicate assertions
             if not _is_duplicate_assertion(remapped_assertion, merged_assertions):
@@ -297,24 +302,24 @@ def _merge_chunk_extractions(chunk_extractions: List[Dict]) -> Dict:
     return {"entities": merged_entities, "assertions": merged_assertions}
 
 
-def _find_duplicate_entity(entity: Dict, entity_type: str, existing_entities: List[Dict]) -> int:
+def _find_duplicate_entity(
+    entity: Dict, entity_type: str, existing_entities: List[Dict]
+) -> int:
     """Find if entity already exists in the list, return index or -1"""
 
     # Instance nodes: check for duplicates based on key attributes
     if entity_type == "patients":
         for idx, existing in enumerate(existing_entities):
-            if (
-                entity.get("name") == existing.get("name")
-                and entity.get("dob") == existing.get("dob")
-            ):
+            if entity.get("name") == existing.get("name") and entity.get(
+                "dob"
+            ) == existing.get("dob"):
                 return idx
 
     elif entity_type == "encounters":
         for idx, existing in enumerate(existing_entities):
-            if (
-                entity.get("date") == existing.get("date")
-                and entity.get("dept") == existing.get("dept")
-            ):
+            if entity.get("date") == existing.get("date") and entity.get(
+                "dept"
+            ) == existing.get("dept"):
                 return idx
 
     elif entity_type == "clinicians":
@@ -330,7 +335,10 @@ def _find_duplicate_entity(entity: Dict, entity_type: str, existing_entities: Li
                 if entity.get("system") == existing.get("system"):
                     return idx
             # Otherwise check by name
-            elif entity.get("name") and entity.get("name").lower() == existing.get("name", "").lower():
+            elif (
+                entity.get("name")
+                and entity.get("name").lower() == existing.get("name", "").lower()
+            ):
                 return idx
 
     return -1
@@ -348,7 +356,9 @@ def _is_duplicate_assertion(assertion: Dict, existing_assertions: List[Dict]) ->
     return False
 
 
-def _execute_upsert_plan(neo4j: Neo4jConnection, plan: Dict, document_id: str = None) -> Dict:
+def _execute_upsert_plan(
+    neo4j: Neo4jConnection, plan: Dict, document_id: str = None
+) -> Dict:
     """Execute the upsert plan against Neo4j"""
     results = {"nodes_created": 0, "relationships_created": 0, "errors": []}
 

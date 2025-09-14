@@ -60,8 +60,14 @@ class CypherGenerator:
         if entity_mappings:
             entity_context = "\n## Mapped Entities (use these UUIDs in the query):\n"
             for original, match in entity_mappings.items():
-                entity_type = match.matched_entity.get("__labels__", ["Unknown"])[0] if "__labels__" in match.matched_entity else "Unknown"
-                entity_context += f"- '{original}' -> {entity_type} with UUID: '{match.uuid}'\n"
+                entity_type = (
+                    match.matched_entity.get("__labels__", ["Unknown"])[0]
+                    if "__labels__" in match.matched_entity
+                    else "Unknown"
+                )
+                entity_context += (
+                    f"- '{original}' -> {entity_type} with UUID: '{match.uuid}'\n"
+                )
 
         prompt = f"""Convert this natural language query to a Neo4j Cypher query.
 
@@ -138,9 +144,7 @@ Return ONLY the Cypher query, no explanation or markdown:"""
         except Exception as e:
             return False, str(e)
 
-    def _fix_cypher_error(
-        self, cypher: str, error: str, original_query: str
-    ) -> str:
+    def _fix_cypher_error(self, cypher: str, error: str, original_query: str) -> str:
         """Fix Cypher query error using Claude"""
 
         prompt = f"""Fix this Cypher query error.

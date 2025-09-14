@@ -15,7 +15,9 @@ def get_neo4j(request: Request) -> Neo4jConnection:
 @router.get("/full")
 def get_full_graph(
     neo4j: Neo4jConnection = Depends(get_neo4j),
-    limit: Optional[int] = Query(None, description="Limit number of nodes (default: all)"),
+    limit: Optional[int] = Query(
+        None, description="Limit number of nodes (default: all)"
+    ),
 ):
     """
     Get entire graph as JSON for client-side visualization
@@ -84,7 +86,7 @@ def get_full_graph(
                 "id": node_uuid,
                 "label": label,
                 "properties": {k: v for k, v in node.items() if k != "uuid"},
-                "display_name": node.get("name") or node.get("title") or node_uuid[:8]
+                "display_name": node.get("name") or node.get("title") or node_uuid[:8],
             }
             nodes_data.append(node_data)
 
@@ -108,7 +110,7 @@ def get_full_graph(
                     "source": source,
                     "target": target,
                     "type": rel_type,
-                    "properties": props
+                    "properties": props,
                 }
                 edges_data.append(edge_data)
 
@@ -118,15 +120,12 @@ def get_full_graph(
             "metadata": {
                 "node_count": len(nodes_data),
                 "edge_count": len(edges_data),
-                "limit_applied": limit is not None
-            }
+                "limit_applied": limit is not None,
+            },
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to export graph: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to export graph: {str(e)}")
 
 
 @router.get("/subgraph/{node_uuid}")
@@ -134,7 +133,7 @@ def get_node_subgraph(
     node_uuid: str,
     neo4j: Neo4jConnection = Depends(get_neo4j),
     depth: int = Query(1, ge=1, le=3, description="Depth of relationships to traverse"),
-    max_nodes: int = Query(100, description="Maximum number of nodes to return")
+    max_nodes: int = Query(100, description="Maximum number of nodes to return"),
 ):
     """
     Get subgraph centered around a specific node
@@ -163,7 +162,9 @@ def get_node_subgraph(
         connected_nodes = result[0].get("connected", [])
 
         all_nodes = [center_node] + [n for n in connected_nodes if n]
-        node_uuids = [n["uuid"] for n in all_nodes if isinstance(n, dict) and n.get("uuid")]
+        node_uuids = [
+            n["uuid"] for n in all_nodes if isinstance(n, dict) and n.get("uuid")
+        ]
 
         # Get relationships between these nodes
         if node_uuids:
@@ -188,8 +189,10 @@ def get_node_subgraph(
                 "id": node["uuid"],
                 "label": label,
                 "properties": {k: v for k, v in node.items() if k != "uuid"},
-                "display_name": node.get("name") or node.get("title") or node["uuid"][:8],
-                "is_center": node["uuid"] == node_uuid
+                "display_name": node.get("name")
+                or node.get("title")
+                or node["uuid"][:8],
+                "is_center": node["uuid"] == node_uuid,
             }
             nodes_data.append(node_data)
 
@@ -213,7 +216,7 @@ def get_node_subgraph(
                     "source": source,
                     "target": target,
                     "type": rel_type,
-                    "properties": props
+                    "properties": props,
                 }
                 edges_data.append(edge_data)
 
@@ -224,17 +227,14 @@ def get_node_subgraph(
                 "center_node": node_uuid,
                 "depth": depth,
                 "node_count": len(nodes_data),
-                "edge_count": len(edges_data)
-            }
+                "edge_count": len(edges_data),
+            },
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get subgraph: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get subgraph: {str(e)}")
 
 
 @router.get("/statistics")
@@ -287,18 +287,14 @@ def get_graph_statistics(neo4j: Neo4jConnection = Depends(get_neo4j)):
             total_relationships = totals[0].get("relationship_count", 0)
 
         return {
-            "totals": {
-                "nodes": total_nodes,
-                "relationships": total_relationships
-            },
+            "totals": {"nodes": total_nodes, "relationships": total_relationships},
             "nodes_by_type": nodes_by_type,
-            "relationships_by_type": relationships_by_type
+            "relationships_by_type": relationships_by_type,
         }
 
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get statistics: {str(e)}"
+            status_code=500, detail=f"Failed to get statistics: {str(e)}"
         )
 
 
