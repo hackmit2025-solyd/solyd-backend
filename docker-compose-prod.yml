@@ -10,13 +10,13 @@ services:
 
       # --- Bolt 커넥터/TLS ---
       - NEO4J_server_bolt_enabled=true
-      - NEO4J_server_bolt_tls__level=OPTIONAL          # 로컬 bolt:// + 외부 bolt+s:// 둘 다 허용
-
-      # --- Bolt SSL 정책(인증서 경로/파일명 명시) ---
+      - NEO4J_server_bolt_tls__level=OPTIONAL
+   
+      # --- Bolt SSL 정책 ---
       - NEO4J_dbms_ssl_policy_bolt_enabled=true
-      - NEO4J_dbms_ssl_policy_bolt_base__directory=/var/lib/neo4j/certificates/bolt
-      - NEO4J_dbms_ssl_policy_bolt_public__certificate=public.crt   # fullchain.pem 복사본
-      - NEO4J_dbms_ssl_policy_bolt_private__key=private.key         # privkey.pem  복사본
+      - NEO4J_dbms_ssl_policy_bolt_base__directory=/ssl/bolt
+      - NEO4J_dbms_ssl_policy_bolt_private__key=private.key
+      - NEO4J_dbms_ssl_policy_bolt_public__certificate=public.crt
       - NEO4J_dbms_ssl_policy_bolt_client__auth=NONE
 
       # --- 리슨/광고 주소 ---
@@ -25,8 +25,7 @@ services:
 
     volumes:
       - neo4j_data:/data
-      # 인증서 디렉터리(쓰기 가능; 엔트리포인트가 chown 시도함)
-      - /opt/neo4j-certs/bolt:/var/lib/neo4j/certificates/bolt
+      - /opt/neo4j-certs:/ssl    # SSL 키/인증서 전체 볼륨 마운트
 
   postgres:
     image: pgvector/pgvector:pg17
