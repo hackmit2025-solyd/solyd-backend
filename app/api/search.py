@@ -219,10 +219,14 @@ def natural_language_query_graph(
         node_patterns = re.findall(r'\((\w+)(?::\w+)?\)', query_base)
         node_vars.update(node_patterns)
 
-        # Build new Cypher for nodes
+        # Build new Cypher for nodes with labels
         if node_vars:
-            # Create RETURN clause with all matched nodes
-            return_clause = "RETURN " + ", ".join(sorted(node_vars))
+            # Create RETURN clause with nodes and their labels
+            return_items = []
+            for var in sorted(node_vars):
+                return_items.append(var)
+                return_items.append(f"labels({var}) as {var}_labels")
+            return_clause = "RETURN " + ", ".join(return_items)
             nodes_cypher = f"{query_base}\n{return_clause}"
         else:
             # Fallback to original if no nodes found
@@ -249,11 +253,16 @@ def natural_language_query_graph(
                     # This is a node
                     node_uuid = value["uuid"]
                     if node_uuid not in nodes_dict:
+                        # Check if we have labels for this node
+                        labels_key = f"{key}_labels"
+                        if labels_key in record and isinstance(record[labels_key], list):
+                            value["__labels__"] = record[labels_key]
+
                         label = _determine_node_label(value)
                         nodes_dict[node_uuid] = {
                             "id": node_uuid,
                             "label": label,
-                            "properties": {k: v for k, v in value.items() if k != "uuid"},
+                            "properties": {k: v for k, v in value.items() if k not in ["uuid", "__labels__"]},
                             "display_name": value.get("name") or value.get("title") or node_uuid[:8]
                         }
 
@@ -335,28 +344,61 @@ def validate_cypher(
 
 
 def _determine_node_label(node: dict) -> str:
-    """Determine node label from its properties"""
+    """Determine node label from its properties or metadata"""
+
+    # Priority 1: Use Neo4j label metadata if available
+    if "__labels__" in node and isinstance(node["__labels__"], list):
+        if node["__labels__"]:
+            return node["__labels__"][0]
+
+    if "__label__" in node:
+        return node["__label__"]
+
+    # Priority 2: Infer from properties (more flexible rules)
+
+    # Patient: has date of birth
     if "dob" in node:
         return "Patient"
-    elif "specialty" in node:
+
+    # Clinician: has specialty or npi
+    if "specialty" in node or "npi" in node:
         return "Clinician"
-    elif "date" in node and "dept" in node:
-        return "Encounter"
-    elif "value" in node and "unit" in node:
+
+    # Encounter: has date with reason or department
+    if "date" in node:
+        if "reason" in node or "dept" in node:
+            return "Encounter"
+
+    # TestResult: has value and/or unit
+    if "value" in node or ("unit" in node and "ref_low" in node):
         return "TestResult"
-    elif "loinc" in node:
+
+    # Test: has loinc or is named like a test
+    if "loinc" in node or "category" in node:
         return "Test"
-    elif "code" in node:
+
+    # Code-based entities (Disease, Medication, Procedure, Symptom)
+    if "code" in node:
         system = node.get("system", "")
-        if "ICD" in system:
+        if "ICD" in system.upper():
             return "Disease"
-        elif "RxNorm" in system:
+        elif "RXNORM" in system.upper():
             return "Medication"
-        elif "CPT" in system or "HCPCS" in system:
+        elif "CPT" in system.upper() or "HCPCS" in system.upper():
             return "Procedure"
-        else:
+        elif "SNOMED" in system.upper():
             return "Symptom"
-    elif "title" in node:
-        return "Guideline"
-    else:
-        return "Unknown"
+        else:
+            # Generic coded entity
+            return "ClinicalConcept"
+
+    # Document-like entities
+    if "title" in node or "content" in node:
+        return "Document"
+
+    # Source document
+    if "source_id" in node or "source_type" in node:
+        return "SourceDocument"
+
+    # Default: Generic entity instead of Unknown
+    return "Entity"
