@@ -14,7 +14,7 @@ services:
       # (기본 파일명 사용: private.key / public.crt)
 
       # Bolt는 TLS 필수(= bolt+s / neo4j+s 사용 가능)
-      - NEO4J_server_bolt_tls__level=REQUIRED
+      - NEO4J_server_bolt_tls__level=OPTIONAL
 
       # 리슨/광고 주소(선택) - 도메인 매칭 권장
       - NEO4J_server_default__listen__address=0.0.0.0
