@@ -32,7 +32,7 @@ def get_services(request: Request, db: Session = Depends(get_db)) -> Dict:
 
 
 @router.post("/pdf")
-async def upload_pdf(
+def upload_pdf(
     file: UploadFile = File(...),
     services: Dict = Depends(get_services)
 ):
@@ -47,7 +47,7 @@ async def upload_pdf(
     try:
         # Save uploaded file to temporary location
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
-            content = await file.read()
+            content = file.file.read()  # Read directly from file object
             temp_file.write(content)
             temp_file_path = temp_file.name
 

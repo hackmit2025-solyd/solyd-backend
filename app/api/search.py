@@ -3,12 +3,10 @@
 from typing import Dict
 import time
 from fastapi import APIRouter, Depends, HTTPException, Request
-from app.db.neo4j import Neo4jConnection
 from app.models.search_schemas import (
     SearchRequest,
     SearchResponse,
     CypherResponse,
-    ErrorResponse,
 )
 from app.services.entity_matcher import EntityMatcher
 from app.services.cypher_generator import CypherGenerator
@@ -27,7 +25,7 @@ def get_services(request: Request) -> Dict:
 
 
 @router.post("/to-cypher", response_model=CypherResponse)
-async def natural_to_cypher(
+def natural_to_cypher(
     search_request: SearchRequest, services: Dict = Depends(get_services)
 ):
     """
@@ -79,7 +77,7 @@ async def natural_to_cypher(
 
 
 @router.post("/query", response_model=SearchResponse)
-async def natural_language_query(
+def natural_language_query(
     search_request: SearchRequest, services: Dict = Depends(get_services)
 ):
     """
@@ -105,7 +103,7 @@ async def natural_language_query(
         entity_mappings = entity_matcher.find_best_matches(extracted_entities)
 
         # Generate Cypher
-        cypher, validation_status = cypher_generator.natural_to_cypher(
+        cypher, _ = cypher_generator.natural_to_cypher(
             search_request.query, entity_mappings
         )
 
@@ -133,7 +131,7 @@ async def natural_language_query(
 
 
 @router.get("/test-fulltext/{entity_type}/{search_text}")
-async def test_fulltext_search(
+def test_fulltext_search(
     entity_type: str, search_text: str, services: Dict = Depends(get_services)
 ):
     """
@@ -169,7 +167,7 @@ async def test_fulltext_search(
 
 
 @router.post("/validate-cypher")
-async def validate_cypher(
+def validate_cypher(
     cypher_query: str, services: Dict = Depends(get_services)
 ):
     """

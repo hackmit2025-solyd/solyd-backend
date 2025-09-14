@@ -1,6 +1,6 @@
 """Service for generating and validating Cypher queries from natural language"""
 
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Optional, Tuple
 import json
 from anthropic import Anthropic
 from app.config import settings
@@ -40,7 +40,7 @@ class CypherGenerator:
         cypher = self._generate_cypher(natural_query, entity_mappings)
 
         # Validate and fix if necessary
-        for attempt in range(max_retries):
+        for _ in range(max_retries):
             is_valid, error = self._validate_cypher(cypher)
             if is_valid:
                 return cypher, "valid"
