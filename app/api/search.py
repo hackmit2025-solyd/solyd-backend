@@ -198,6 +198,26 @@ def natural_language_query_graph(
             search_request.query, entity_mappings
         )
 
+        # Modify the Cypher to return full nodes instead of individual properties
+        # Replace RETURN clause to return full nodes
+        import re
+
+        # Find the RETURN clause and extract the node variables
+        return_match = re.search(r'RETURN\s+(.+?)(?:\s+LIMIT|$)', cypher, re.IGNORECASE | re.DOTALL)
+        if return_match:
+            return_clause = return_match.group(1)
+            # Extract unique node variables (e.g., p, e, m from p.uuid, p.name, e.uuid, etc.)
+            node_vars = set()
+            for part in return_clause.split(','):
+                if '.' in part:
+                    var_name = part.strip().split('.')[0]
+                    node_vars.add(var_name)
+
+            # Rebuild RETURN clause with full nodes
+            if node_vars:
+                new_return = "RETURN " + ", ".join(sorted(node_vars))
+                cypher = re.sub(r'RETURN\s+.+?(?=\s+LIMIT|$)', new_return, cypher, flags=re.IGNORECASE | re.DOTALL)
+
         # Execute query with limit
         if search_request.limit and "LIMIT" not in cypher.upper():
             cypher += f" LIMIT {search_request.limit}"
@@ -212,7 +232,7 @@ def natural_language_query_graph(
             if not isinstance(record, dict):
                 continue
 
-            # Extract nodes and relationships from each record
+            # Extract nodes from each record
             for key, value in record.items():
                 if isinstance(value, dict) and "uuid" in value:
                     # This is a node
