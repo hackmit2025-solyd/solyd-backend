@@ -1,0 +1,47 @@
+services:
+  neo4j:
+    image: neo4j:latest
+    container_name: neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/P@ssw0rd
+
+      # --- Bolt SSL 정책 ---
+      - NEO4J_dbms_ssl_policy_bolt_enabled=true
+      - NEO4J_dbms_ssl_policy_bolt_base__directory=/var/lib/neo4j/certificates/bolt
+      # (기본 파일명 사용: private.key / public.crt)
+
+      # Bolt는 TLS 필수(= bolt+s / neo4j+s 사용 가능)
+      - NEO4J_server_bolt_tls__level=REQUIRED
+
+      # 리슨/광고 주소(선택) - 도메인 매칭 권장
+      - NEO4J_server_default__listen__address=0.0.0.0
+      - NEO4J_server_bolt_advertised__address=api.solyd.serve.cx:7687
+
+      # (선택) HTTPS도 켜고 싶다면:
+      # - NEO4J_server_https_enabled=true
+      # - NEO4J_dbms_ssl_policy_https_enabled=true
+      # - NEO4J_dbms_ssl_policy_https_base__directory=/var/lib/neo4j/certificates/https
+      # 그리고 동일 방식으로 certificates/https에 private.key/public.crt 배치
+    volumes:
+      - neo4j_data:/data
+      # 위에서 만든 인증서 디렉터리를 Bolt 경로로 마운트
+      - /opt/neo4j-certs/bolt:/var/lib/neo4j/certificates/bolt:ro
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=P@ssw0rd
+      - POSTGRES_DB=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  neo4j_data:
+  postgres_data:
