@@ -1,0 +1,15 @@
+{
+  "name": "rox-slide",
+  "version": "1.0.0",
+  "description": "Solyd presentation for Rox Challenge",
+  "scripts": {
+    "build": "marp presentation.md -o presentation.html",
+    "build-pdf": "marp presentation.md -o presentation.pdf",
+    "build-pptx": "marp presentation.md -o presentation.pptx",
+    "watch": "marp presentation.md -o presentation.html --watch",
+    "serve": "marp presentation.md -s"
+  },
+  "devDependencies": {
+    "@marp-team/marp-cli": "^3.0.0"
+  }
+}

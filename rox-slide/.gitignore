@@ -1,0 +1,26 @@
+# Marp presentation outputs
+*.html
+*.pdf
+*.pptx
+
+# Node modules
+node_modules/
+package-lock.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Build artifacts
+dist/
+build/
+out/
